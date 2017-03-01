@@ -1,0 +1,52 @@
+---
+title: "Issue 3"
+author: "Cheryl"
+date: "3/1/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Find % of users who buy coupons in the same prefecture
+
+```{r}
+library(ggplot2)
+library(scales)
+
+#Load coupon_detail, user_list and coupon_area
+coupon_detail_train = read.csv("coupon_detail_train.csv", stringsAsFactors = F)
+user_list = read.csv("user_list_en.csv", stringsAsFactors = F)
+coupon_area_train = read.csv("coupon_area_train_en.csv", stringsAsFactors = F)
+
+str(coupon_detail_train)
+str(user_list)
+str(coupon_area_train)
+```
+
+Isolate data needed
+```{r}
+#Isolate USER_ID_hash and COUPON_ID_hash from coupon_detail_train
+user.coupon.id = data.frame(USER_ID_hash=coupon_detail_train$USER_ID_hash, COUPON_ID_hash=coupon_detail_train$COUPON_ID_hash)
+#Isolate USER_ID_hash and en_pref from user_list
+user_list_pref = data.frame(USER_ID_hash=user_list$USER_ID_hash, user_pref=user_list$en_pref)
+#Isolate COUPON_ID_hash and en_pref from coupon_area_train
+coupon_area_pref = data.frame(COUPON_ID_hash=coupon_area_train$COUPON_ID_hash,coupon_pref=coupon_area_train$en_pref)
+
+#merge user_coupon_id with user_list_pref and coupon_area_pref
+user.coupon.id.pref= merge(user.coupon.id,user_list_pref,by="USER_ID_hash", all.x=T)
+user.coupon.id.pref= merge(user.coupon.id.pref,coupon_area_pref, by="COUPON_ID_hash")
+```
+
+% of users who buy coupons in the same prefecture
+```{r}
+user.coupon.id.pref$same_pref = ifelse(user.coupon.id.pref$user_pref==user.coupon.id.pref$coupon_pref,1,0)
+user.coupon.id.pref$same_pref = as.factor(user.coupon.id.pref$same_pref)
+
+#Visualization
+ggplot(user.coupon.id.pref[!is.na(user.coupon.id.pref$same_pref),], aes(x = same_pref, fill=same_pref)) +  
+  geom_bar(aes(y = (..count..)/sum(..count..))) + 
+  scale_y_continuous(labels = percent) +
+  labs(title="% of users who buy coupons in the same prefecture", y="Percent")
+```
