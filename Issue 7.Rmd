@@ -1,0 +1,51 @@
+---
+title: "Issue 7"
+author: "Cheryl"
+date: "3/1/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Find discount rate vs age group / gender
+
+Load coupon_detail, coupon_list, user_list
+```{r}
+coupon_detail_train = read.csv("coupon_detail_train.csv", stringsAsFactors = F)
+coupon_list_train = read.csv("coupon_list_train_en.csv", stringsAsFactors = F)
+user_list = read.csv("user_list_en.csv", stringsAsFactors = F)
+
+str(coupon_detail_train)
+str(coupon_list_train)
+str(user_list)
+```
+
+Isolate and merge data
+```{r}
+#Isolate USER_ID_hash and COUPON_ID_hash from coupon_detail_train
+user.coupon.id = data.frame(USER_ID_hash=coupon_detail_train$USER_ID_hash, COUPON_ID_hash=coupon_detail_train$COUPON_ID_hash)
+#Isolate PRICE_RATE and COUPON_ID_hash from coupon_list_train
+coupon_disc_rate = data.frame(COUPON_ID_hash=coupon_list_train$COUPON_ID_hash,PRICE_RATE=coupon_list_train$PRICE_RATE)
+#Isolate SEX_ID, AGE, and USER_ID_hash from user_list
+user_demo = data.frame(USER_ID_hash=user_list$USER_ID_hash, SEX_ID= user_list$SEX_ID, AGE=user_list$AGE)
+
+
+#Merge user.coupon.id with coupon_disc_rate and user_demo
+disc.rate.corr = merge(user.coupon.id, coupon_disc_rate, by="COUPON_ID_hash", all.x=T)
+disc.rate.corr = merge(disc.rate.corr, user_demo, by="USER_ID_hash", all.x=T)
+```
+
+Correlation
+```{r}
+#Discount rate v Age
+ggplot(disc.rate.corr,aes(x=AGE,y=PRICE_RATE)) + geom_point(fill='blue') + ylim(0,101) + stat_smooth(method="lm") 
+#No correlation
+
+#Discount rate v Gender
+ggplot(disc.rate.corr) + geom_boxplot(aes(x=SEX_ID,y=PRICE_RATE)) 
+
+#Scatterplot of discount rate v age, + gender
+ggplot(disc.rate.corr,aes(x=AGE,y=PRICE_RATE, color=SEX_ID)) + geom_point() + ylim(0,101) + stat_smooth(method="lm") 
+#No correlation
+```
