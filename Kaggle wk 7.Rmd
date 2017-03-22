@@ -1,0 +1,27 @@
+---
+title: "Proj Wk 7"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#1. registration date of user vs frequency of purchase?, requires users frequency of purchases
+#compute frequency of purchases data table 
+
+```{r}
+library(plyr) 
+library(ggplot2)
+#1. registration date of user vs frequency of purchase?, requires users frequency of purchases
+#compute frequency of purchases data table 
+userpfreq <- count(coupon_detail_train,"USER_ID_hash")
+user_list <- merge(user_list,userpfreq, by = "USER_ID_hash")
+user_list$REG_YEAR <- as.character( format( as.Date(user_list$REG_DATE, origin='1900-1-1'), '%Y'))
+plot1 <- ggplot(user_list,aes(x= user_list$freq, fill=user_list$REG_YEAR)) + geom_bar() +xlim(0,75)
+
+#2. DISPERIOD vs frequency of coupon use 
+purchasefreq <- count(coupon_detail_train,"COUPON_ID_hash")
+coupon_list_train <- merge(coupon_list_train,purchasefreq,by = "COUPON_ID_hash")
+plot2 <- ggplot(coupon_list_train,aes(x=coupon_list_train$DISPPERIOD, y=coupon_list_train$freq))+geom_point(alpha = .3) +ylim(0,2000)
+```
