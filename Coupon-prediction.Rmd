@@ -1,0 +1,158 @@
+---
+title: "Coupon Prediction"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+```
+
+```{r}
+dir <- './data/'
+detail_train <- read.csv(paste0(dir,"coupon_detail_train_en.csv"))
+# colnames(detail_train$SMALL_AREA_NAME) change col name to residential small area
+list_train <- read.csv(paste0(dir,"coupon_list_train_en.csv")) #translated to en
+list_test <- read.csv(paste0(dir,"coupon_list_test.csv"))
+area_train <- read.csv(paste0(dir,"coupon_area_train_en.csv")) #translated to en
+user_list <- read.csv(paste0(dir,"user_list.csv"), na.strings=c("", NA))
+# visit_train <- read.csv(paste0(dir,"coupon_visit_train.csv")) # big file
+pref_location <- read.csv(paste0(dir,"prefecture_locations.csv"))
+# visit_train <- visit_train[visit_train$PURCHASE_FLG!=1,c("VIEW_COUPON_ID_hash","USER_ID_hash")]
+```
+
+## Understanding coupon area train data
+each COUPON_ID_hash can have multiple rows. selecting one example of COUPON_ID_hash reveals that each coupon can be listed for multiple locations.
+```{r}
+sum(duplicated(area_train$COUPON_ID_hash))
+head(area_train[duplicated(area_train$COUPON_ID_hash),])
+area_train[area_train$COUPON_ID_hash == "7d1ce87a632bc4a57cfb4fc4a895cced",]
+
+# one coupn can be listed in more than one prefecture
+head(table(area_train$COUPON_ID_hash,area_train$PREF_NAME))
+```
+
+## Understanding coupon list train
+This dataset contains characteristics of each coupon.
+There are no duplicates. Each row is one coupon.
+There is location information (ken, small area name, large area name) for each coupon in this data set. But each coupon can have multiple locations as seen in area_train. How is the location determined in list_train?
+```{r}
+head(list_train)
+sum(duplicated(list_train$COUPON_ID_hash))
+
+# looking at the same coupon ID as in area_train, the location in list_train is one of the many locations in area_train.
+list_train[list_train$COUPON_ID_hash == "7d1ce87a632bc4a57cfb4fc4a895cced",]
+# ken = Hyogo Prefecture
+
+```
+
+## Coupon Detail train
+This data set contains purchase log of users.
+A quick look at the data reveals that one user can purchase the same coupon of the same location at different times, each generating a row in this data set.
+What happens when a user purchases the same coupon at two locations at the same time? does this generate two rows or one row?
+
+```{r}
+head(detail_train)
+head(detail_train[duplicated(detail_train$USER_ID_hash),])
+
+
+```
+
+## test set is a different set of coupons from train
+
+## are the test coupons in the view log?
+
+## Understanding User list
+Prefecture (not small area) is provided
+```{r}
+head(user_list)
+str(user_list)
+```
+
+There are missing prefecture data in user_list. Why are there missing residential addresses? Have these users purchased something?
+```{r}
+sum(is.na(user_list$PREF_NAME)) # 7256 rows with missing pref location
+
+# Checking if all purchased coupons have a user residential area name
+sum(is.na(detail_train$SMALL_AREA_NAME)) # no NAs, every coupon purchase has a user residential area recorded
+
+sum(user_list[is.na(user_list$PREF_NAME), "USER_ID_hash" ] %in% unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"]))
+# 7229 users without pref name in user_list but has small area residential name in detail_train
+
+sum( unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"] %in% user_list[is.na(user_list$PREF_NAME), "USER_ID_hash" ]))
+
+test <- merge(user_list[is.na(user_list$PREF_NAME), "USER_ID_hash" ], unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"]), all=FALSE)
+
+```
+Can we use SMALL_AREA_NAME to get prefecture name for the users without a residential prefecture recorded? SMALL_AREA_NAME is the "User redidential area name" according to Kaggle Data page, but a quick check revealed that the same user can be listed in multiple locations on the purchase log, yet have no registered address in the user list. How could that be?
+
+```{r}
+head(detail_train[,c("USER_ID_hash", "SMALL_AREA_NAME")], n=10)
+```
+
+Browsing some coupon pages revealed that coupons like restaurant discount tickets or physical products have to be delivered to an address.
+
+```"Discount ticket" will be delivered to the designated address at the time of purchase by "Kuroneko DM flight"```
+
+That explains multiple small areas associated with each user. Coupons could be delivered either to the user's or friend's/family's address. With this in mind, we can fill up missing prefectures in user_list using the most common prefecture the coupons are delivered to.
+
+```{r}
+# Get (small area name - prefecture name) association from list_train
+small.area.pref <- unique(list_train[,c("en_small_area", "en_ken")])
+
+# Merge with detail train to get prefecture for small area
+detail_train <- merge(detail_train, small.area.pref, by.x = "en_SMALL_AREA_NAME", by.y = "en_small_area", all.x = TRUE)
+
+# Get most frequent prefecture for each user from purchase log
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+mode.pref <- detail_train %>% 
+  group_by(USER_ID_hash) %>%
+  summarize(mode.pref = getmode(en_ken))
+
+
+```
+
+
+## Merge list_train, detail_train to get characteristics of each coupon associated with purchase log of coupons
+```{r}
+train <- merge(detail_train, list_train, on = COUPON_ID_hash, all.x = TRUE)
+```
+
+
+% of users buying in same prefecture
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
