@@ -1,0 +1,101 @@
+---
+title: '#3 feature selections'
+author: "Nelson Tan"
+date: "March 25, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, warning=FALSE}
+library(readr)
+library(data.table)
+library(lubridate)
+```
+
+Reading in the files 
+
+```{r read}
+coupon_list_train<-read_csv("coupon_list_train_en.csv")
+coupon_view_train<-read_csv("coupon_visit_train.csv")
+user_list <- read_csv("user_list_en.csv")
+coupon_purchase_train<- read_csv("coupon_purchase_train.csv")
+coupon_area_train<-read_csv("coupon_area_train_en.csv")
+```
+
+
+# Feature Selections 
+We would then develop feature selections. There can be coupon specific features, user specific features, user-coupon specific features. Here we will do a notation to show the catergories the features belong to. 
+
+U: user specific    
+C: coupon specific   
+UC user-coupon specific 
+
+
+```{r clean}
+#user clean
+factor.cols <- c("en_pref", "SEX_ID")
+for (j in factor.cols) set(user_list, j = j, value = as.factor(user_list[[j]]))
+
+#coupon_purchase_train cleaning 
+coupon_purchase_train$en_small_area<- factor(coupon_purchase_train$en_small_area)
+
+#coupon_list_cleaning
+factor.cols <- c("en_capsule", "en_genre", "en_small_area", "en_ken", "en_large_area")
+for (j in factor.cols) set(coupon_list_train, j = j, value = as.factor(coupon_list_train[[j]]))
+```
+
+## Feature 1 (U): What is the most view category for each visitor 
+
+```{r combine view and coupon}
+masterdata<-merge(coupon_view_train, subset(coupon_list_train, select = c(COUPON_ID_hash,en_capsule,en_genre,PRICE_RATE,DISCOUNT_PRICE,en_small_area,en_ken,en_large_area) )
+, by.x ='VIEW_COUPON_ID_hash', by.y ='COUPON_ID_hash') # combine purchase log with coupon details  
+
+```
+
+```{r combine view coupon and master}
+masterdatauser <- merge(masterdata, subset(user_list,select = c(USER_ID_hash,AGE,SEX_ID,en_pref)), by='USER_ID_hash')
+masterdatauser<- masterdatauser[order(masterdatauser$USER_ID_hash,masterdatauser$SESSION_ID_hash),]
+```
+
+
+```{r most view catergory, warning=FALSE}
+library(plyr)
+df<- count(masterdatauser, c("USER_ID_hash", "en_genre"))
+df <- dcast(df,USER_ID_hash ~ en_genre, value.var="freq")
+df$most_vist <-colnames(df)[apply(df,1,which.max)]
+head(df)
+## appending it to user 
+user_list <- merge(user_list,subset(df, select=c(USER_ID_hash,most_vist)),by = "USER_ID_hash",all.x = T)
+```
+
+We have user specific feature of most visited category
+
+##Feature 2 (U) : What is recently most visited category for each user? 
+Recent is determine by 1 week before the actual test date 
+which is 03/06 - 09/06
+
+```{r recently most view category, warning = FALSE}
+date1 <- as.POSIXct("2012-06-03 00:00:00")
+date2 <- as.POSIXct("2012-06-10 00:00:00")
+int <- interval(date1, date2)
+recentmasterdatauser<- masterdatauser[masterdatauser$I_DATE %within% int,]
+df1<- count(recentmasterdatauser, c("USER_ID_hash", "en_genre"))
+df1 <- dcast(df1,USER_ID_hash ~ en_genre, value.var="freq")
+df1$recent_most_vist <-colnames(df1)[apply(df1,1,which.max)]
+head(df1)
+cat('number of users that view an item',nrow(df1))
+##appening it to user
+user_list <- merge(user_list,subset(df1, select=c(USER_ID_hash,recent_most_vist)),by = "USER_ID_hash",all.x = T)
+```
+
+##feature 3(C): binning coupon discount rates to bins
+
+```{r}
+coupon_list_train$discount_bin<-cut(coupon_list_train$PRICE_RATE, c(0,20,40,60,80,100)) 
+```
+
+
+
