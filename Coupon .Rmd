@@ -1,0 +1,181 @@
+---
+title: 'Coupon'
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+detachAllPackages <- function() {
+  basic.packages <- c("package:stats","package:graphics","package:grDevices","package:utils","package:datasets","package:methods","package:base")
+  package.list <- search()[ifelse(unlist(gregexpr("package:",search()))==1,TRUE,FALSE)]
+  package.list <- setdiff(package.list,basic.packages)
+  if (length(package.list)>0)  for (package in package.list) detach(package, character.only=TRUE)
+}
+detachAllPackages()
+``` 
+
+# Business Case
+Our Business Understanding is how can we predict whehter what is the probability that the user will buy if they view the coupon.We intend to find out the variables that affect people purchase decision. 
+
+# Translation of data 
+```{r translation}
+
+# Create master translation table from Japanese to English
+coupon_list_train = read.csv("coupon_list_train.csv", as.is=T) # Source file the English list is keyed by
+trans = data.frame(
+  jp=unique(c(coupon_list_train$GENRE_NAME, coupon_list_train$CAPSULE_TEXT,
+              coupon_list_train$large_area_name, coupon_list_train$ken_name,
+              coupon_list_train$small_area_name)),
+  en=c("Food","Hair salon","Spa","Relaxation","Beauty","Nail and eye salon","Delivery service","Lesson","Gift card","Other coupon","Leisure","Hotel and Japanese hotel","Health and medical","Other","Hotel","Japanese hotel","Vacation rental","Lodge","Resort inn","Guest house","Japanse guest house","Public hotel","Beauty","Event","Web service","Class","Correspondence course","Kanto","Kansai","East Sea","Hokkaido","Kyushu-Okinawa","Northeast","Shikoku","Chugoku","Hokushinetsu","Saitama Prefecture","Chiba Prefecture","Tokyo","Kyoto","Aichi Prefecture","Kanagawa Prefecture","Fukuoka Prefecture","Tochigi Prefecture","Osaka prefecture","Miyagi Prefecture","Fukushima Prefecture","Oita Prefecture","Kochi Prefecture","Hiroshima Prefecture","Niigata Prefecture","Okayama Prefecture","Ehime Prefecture","Kagawa Prefecture","Tokushima Prefecture","Hyogo Prefecture","Gifu Prefecture","Miyazaki Prefecture","Nagasaki Prefecture","Ishikawa Prefecture","Yamagata Prefecture","Shizuoka Prefecture","Aomori Prefecture","Okinawa","Akita","Nagano Prefecture","Iwate Prefecture","Kumamoto Prefecture","Yamaguchi Prefecture","Saga Prefecture","Nara Prefecture","Mie","Gunma Prefecture","Wakayama Prefecture","Yamanashi Prefecture","Tottori Prefecture","Kagoshima prefecture","Fukui Prefecture","Shiga Prefecture","Toyama Prefecture","Shimane Prefecture","Ibaraki Prefecture","Saitama","Chiba","Shinjuku, Takadanobaba Nakano - Kichijoji","Kyoto","Ebisu, Meguro Shinagawa","Ginza Shinbashi, Tokyo, Ueno","Aichi","Kawasaki, Shonan-Hakone other","Fukuoka","Tochigi","Minami other","Shibuya, Aoyama, Jiyugaoka","Ikebukuro Kagurazaka-Akabane","Akasaka, Roppongi, Azabu","Yokohama","Miyagi","Fukushima","Much","Kochi","Tachikawa Machida, Hachioji other","Hiroshima","Niigata","Okayama","Ehime","Kagawa","Northern","Tokushima","Hyogo","Gifu","Miyazaki","Nagasaki","Ishikawa","Yamagata","Shizuoka","Aomori","Okinawa","Akita","Nagano","Iwate","Kumamoto","Yamaguchi","Saga","Nara","Triple","Gunma","Wakayama","Yamanashi","Tottori","Kagoshima","Fukui","Shiga","Toyama","Shimane","Ibaraki"),
+  stringsAsFactors = F)
+
+# Append data with translated columns...
+
+# COUPON_LIST_TRAIN.CSV
+coupon_list_train = read.csv("coupon_list_train.csv", as.is=T) # Read data file to translate
+names(trans)=c("jp","en_capsule") # Rename column
+coupon_list_train=merge(coupon_list_train,trans,by.x="CAPSULE_TEXT",by.y="jp",all.x=T) # Join translation onto original data
+names(trans)=c("jp","en_genre"); coupon_list_train=merge(coupon_list_train,trans,by.x="GENRE_NAME",by.y="jp",all.x=T)
+names(trans)=c("jp","en_small_area"); coupon_list_train=merge(coupon_list_train,trans,by.x="small_area_name",by.y="jp",all.x=T)
+names(trans)=c("jp","en_ken"); coupon_list_train=merge(coupon_list_train,trans,by.x="ken_name",by.y="jp",all.x=T)
+names(trans)=c("jp","en_large_area"); coupon_list_train=merge(coupon_list_train,trans,by.x="large_area_name",by.y="jp",all.x=T)
+write.csv(coupon_list_train, "coupon_list_train_en.csv", row.names = F)
+
+# COUPON_AREA_TRAIN.CSV
+coupon_area_train = read.csv("coupon_area_train.csv", as.is=T) 
+names(trans)=c("jp","en_small_area"); coupon_area_train=merge(coupon_area_train,trans,by.x="SMALL_AREA_NAME",by.y="jp",all.x=T)
+names(trans)=c("jp","en_pref"); coupon_area_train=merge(coupon_area_train,trans,by.x="PREF_NAME",by.y="jp",all.x=T)
+write.csv(coupon_area_train, "coupon_area_train_en.csv", row.names = F)
+
+# USER_LIST
+user_list = read.csv("user_list.csv", as.is=T) 
+names(trans)=c("jp","en_pref"); user_list=merge(user_list,trans,by.x="PREF_NAME",by.y="jp",all.x=T)
+write.csv(user_list, "user_list_en.csv", row.names = F)
+``` 
+
+```{r}
+#refresh environment 
+(rm(list=setdiff(ls(), "detachAllPackages")))
+detachAllPackages()
+``` 
+
+# Data Creation
+```{r libraries,warning=FALSE}
+library(readr)
+library(lubridate)
+```
+
+Using readr, we are able to check whats types of variables we are reading to the 
+environment.  
+
+```{r read}
+visit.train <- read_csv("coupon_visit_train.csv")
+```
+
+
+## Reducing dataset
+Subsetting to 3 months data Data: 2012-04-24 - 2012-06-23
+
+```{r view log}
+#test data for view log
+date1 <- as.POSIXct("2012-04-24 00:00:00")
+date2 <- as.POSIXct("2012-06-24 00:00:00")
+int <- interval(date1, date2)
+coupon.view <- visit.train[visit.train$I_DATE %within% int,]
+write_csv(coupon.view, "coupon_view_3months.csv")
+```
+
+```{r}
+#refresh environment 
+(rm(list=setdiff(ls(), "detachAllPackages")))
+detachAllPackages()
+``` 
+
+
+# Adding coupon, user feature selection here, write it in to csv
+```{r ,warning=FALSE}
+library(readr)
+library(plyr)
+library(reshape2)
+```
+
+```{r }
+list_train <- read_csv("coupon_list_train_en.csv") #translated to en
+user_list <- read_csv("user_list_en.csv")
+visit <- read_csv("coupon_view_3months.csv")
+```
+
+```{r combine}
+masterdata<-merge(visit, subset(list_train, select = c(COUPON_ID_hash,en_capsule,en_genre,PRICE_RATE,DISCOUNT_PRICE,en_small_area,en_ken,en_large_area) ), by.x ='VIEW_COUPON_ID_hash', by.y ='COUPON_ID_hash') # combine purchase log with coupon details  
+masterdatauser <- merge(masterdata, subset(user_list,select = c(USER_ID_hash,AGE,SEX_ID,en_pref)), by='USER_ID_hash')
+masterdatauser<- masterdatauser[order(masterdatauser$USER_ID_hash,masterdatauser$SESSION_ID_hash),]
+```
+
+```{r}
+df<- count(masterdatauser, c("USER_ID_hash", "en_genre"))
+df <- dcast(df,USER_ID_hash ~ en_genre, value.var="freq")
+df$most_vist <-colnames(df)[apply(df,1,which.max)]
+head(df)
+user_list <- merge(user_list,subset(df, select=c(USER_ID_hash,most_vist)),by = "USER_ID_hash",all.x = T)
+write_csv(user_list,"user_list_en.csv")
+```
+
+
+
+```{r}
+#refresh environment 
+(rm(list=setdiff(ls(), "detachAllPackages")))
+detachAllPackages()
+``` 
+
+## Doing of exploration here 
+
+```{r, warning=FALSE}
+library(readr)
+library(dplyr)
+``` 
+
+```{r}
+area_train <- read_csv("coupon_area_train_en.csv") #translated to en
+list_train <- read_csv("coupon_list_train_en.csv") #translated to en
+user_list <- read_csv("user_list_en.csv")
+pref_location <- read_csv("prefecture_locations.csv")
+visit <- read_csv("coupon_view_3months.csv")
+```
+
+
+
+## Combining user, coupon and view information
+```{r}
+visit.info<- visit %>%
+  group_by(VIEW_COUPON_ID_hash,USER_ID_hash)%>%
+  summarise(purchase = max(PURCHASE_FLG))
+data <-merge(list_train,visit.info, by.x = "COUPON_ID_hash",by.y = "VIEW_COUPON_ID_hash")
+data <-merge(data, user_list,by="USER_ID_hash")
+```
+
+##add coupon & user specific features & 
+
+
+
+##Select the data required for modelling 
+
+
+```{r}
+#refresh environment 
+(rm(list=setdiff(ls(), "detachAllPackages")))
+detachAllPackages()
+```
+
+#modelling  
+
+
+
+
+
+
