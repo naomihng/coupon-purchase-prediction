@@ -13,14 +13,18 @@ library(dplyr)
 
 ```{r}
 dir <- './data/'
-detail_train <- read.csv(paste0(dir,"coupon_detail_train_en.csv"))
-# colnames(detail_train$SMALL_AREA_NAME) change col name to residential small area
-list_train <- read.csv(paste0(dir,"coupon_list_train_en.csv")) #translated to en
-list_test <- read.csv(paste0(dir,"coupon_list_test.csv"))
 area_train <- read.csv(paste0(dir,"coupon_area_train_en.csv")) #translated to en
-user_list <- read.csv(paste0(dir,"user_list.csv"), na.strings=c("", NA))
-# visit_train <- read.csv(paste0(dir,"coupon_visit_train.csv")) # big file
+list_train <- read.csv(paste0(dir,"coupon_list_train_en.csv")) #translated to en
+user_list <- read.csv(paste0(dir,"user_list_en.csv"), na.strings=c("", NA))
 pref_location <- read.csv(paste0(dir,"prefecture_locations.csv"))
+visit <- read.csv(paste0(dir,"coupon_view_3months.csv"))
+
+detail_train <- read.csv(paste0(dir,"coupon_detail_train_en.csv"))
+
+# not using:
+# colnames(detail_train$SMALL_AREA_NAME) change col name to residential small area
+# list_test <- read.csv(paste0(dir,"coupon_list_test.csv"))
+# visit_train <- read.csv(paste0(dir,"coupon_visit_train.csv")) # big file
 # visit_train <- visit_train[visit_train$PURCHASE_FLG!=1,c("VIEW_COUPON_ID_hash","USER_ID_hash")]
 ```
 
@@ -58,7 +62,6 @@ What happens when a user purchases the same coupon at two locations at the same 
 head(detail_train)
 head(detail_train[duplicated(detail_train$USER_ID_hash),])
 
-
 ```
 
 ## test set is a different set of coupons from train
@@ -72,19 +75,30 @@ head(user_list)
 str(user_list)
 ```
 
+## Data cleaning/wrangling
+Rename columns to differentiate user and coupon prefecture
+```{r}
+names(user_list)[names(user_list)=="en_pref"] <- "user_pref"
+names(list_train)[names(list_train)=="en_ken"] <- "coupon_pref"
+```
+
+Selecting more relevant columns to reduce dataframe size
+```{r}
+list_train <- subset(list_train, select=c(COUPON_ID_hash,en_capsule,en_genre,PRICE_RATE,CATALOG_PRICE,DISCOUNT_PRICE,VALIDPERIOD,en_small_area,coupon_pref))
+user_list <- subset(user_list,select = c(USER_ID_hash,AGE,SEX_ID,user_pref))
+```
+
 There are missing prefecture data in user_list. Why are there missing residential addresses? Have these users purchased something?
 ```{r}
-sum(is.na(user_list$PREF_NAME)) # 7256 rows with missing pref location
-
+cat(sum(is.na(user_list$user_pref)), "users with missing pref location\n")
 # Checking if all purchased coupons have a user residential area name
-sum(is.na(detail_train$SMALL_AREA_NAME)) # no NAs, every coupon purchase has a user residential area recorded
 
-sum(user_list[is.na(user_list$PREF_NAME), "USER_ID_hash" ] %in% unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"]))
-# 7229 users without pref name in user_list but has small area residential name in detail_train
+cat("purchases without user residential area recorded:", sum(is.na(detail_train$SMALL_AREA_NAME)),"\n" )
+# no NAs, every coupon purchase has a user residential area recorded
 
-sum( unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"] %in% user_list[is.na(user_list$PREF_NAME), "USER_ID_hash" ]))
+cat(sum(user_list[is.na(user_list$user_pref), "USER_ID_hash" ] %in% unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"])), "users without pref name in user_list but has small area residential name in detail_train\n")
 
-test <- merge(user_list[is.na(user_list$PREF_NAME), "USER_ID_hash" ], unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"]), all=FALSE)
+# sum( unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"] %in% user_list[is.na(user_list$user_pref), "USER_ID_hash" ]))
 
 ```
 Can we use SMALL_AREA_NAME to get prefecture name for the users without a residential prefecture recorded? SMALL_AREA_NAME is the "User redidential area name" according to Kaggle Data page, but a quick check revealed that the same user can be listed in multiple locations on the purchase log, yet have no registered address in the user list. How could that be?
@@ -101,7 +115,7 @@ That explains multiple small areas associated with each user. Coupons could be d
 
 ```{r}
 # Get (small area name - prefecture name) association from list_train
-small.area.pref <- unique(list_train[,c("en_small_area", "en_ken")])
+small.area.pref <- unique(list_train[,c("en_small_area", "coupon_pref")])
 
 # Merge with detail train to get prefecture for small area
 detail_train <- merge(detail_train, small.area.pref, by.x = "en_SMALL_AREA_NAME", by.y = "en_small_area", all.x = TRUE)
@@ -114,31 +128,66 @@ getmode <- function(v) {
 
 mode.pref <- detail_train %>% 
   group_by(USER_ID_hash) %>%
-  summarize(mode.pref = getmode(en_ken))
+  summarize(mode.pref = getmode(coupon_pref))
 
+user_list <- merge(user_list, mode.pref, by = "USER_ID_hash", all.x = TRUE)
+
+user_list$user_pref <- as.character(user_list$user_pref)
+user_list$mode.pref <- as.character(user_list$mode.pref)
+user_list$user_pref <- ifelse(is.na(user_list$user_pref), user_list$mode.pref, user_list$user_pref)
+user_list$mode.pref <- NULL
+```
+
+# Preparing data for modeling
+Rows from view log contain multiple of the same coupon-user pair, because each user can view multiple times then eventually purchase during another session, each recorded as one row.
+Summarizing into unique coupon-user pairs, in that users who eventually bought will be classified as purchased.
+```{r}
+visit.info<- visit %>%
+  group_by(VIEW_COUPON_ID_hash,USER_ID_hash)%>%
+  summarise(purchase = max(PURCHASE_FLG))
+```
+
+merge visit, user characteristics, coupon characteristics
+```{r}
+dat <-merge(list_train,visit.info, by.x = "COUPON_ID_hash",by.y = "VIEW_COUPON_ID_hash")
+dat <-merge(dat, user_list, by="USER_ID_hash")
+```
+
+# Feature Engineering
+most frequently visited genre
+```{r}
+mode.genre <- dat %>% 
+  group_by(USER_ID_hash) %>%
+  summarize(mode.visit.genre = getmode(en_genre))
+
+dat <- merge(dat, mode.genre,by = "USER_ID_hash",all.x = TRUE)
+```
+
+distance between user and coupon default prefecture
+```{r}
+
+```
+
+distance between user and coupon nearest branch prefecture
+```{r}
+
+```
+
+number of times coupon viewed
+```{r}
 
 ```
 
 
-## Merge list_train, detail_train to get characteristics of each coupon associated with purchase log of coupons
+## Split into test and train dataset
 ```{r}
-train <- merge(detail_train, list_train, on = COUPON_ID_hash, all.x = TRUE)
-```
+set.seed(123)
+sample <- sample(c(TRUE, FALSE), nrow(dat), prob=c(0.7,0.3), replace=TRUE)
+train <- dat[sample,]
+test <- dat[!sample,]
 
-
-% of users buying in same prefecture
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-```{r}
-
+write.csv(train, paste0(dir,"visit_train.csv"), row.names = F)
+write.csv(test, paste0(dir,"visit_test.csv"), row.names = F)
 ```
 
 ```{r}
