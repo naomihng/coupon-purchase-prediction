@@ -234,6 +234,11 @@ dat$USABLE_DATE_BEFORE_HOLIDAY[is.na(dat$USABLE_DATE_BEFORE_HOLIDAY)] <- 1
 
 drops_dayofweek <- c("USABLE_DATE_MON","USABLE_DATE_TUE","USABLE_DATE_WED","USABLE_DATE_THU", "USABLE_DATE_FRI","USABLE_DATE_SAT","USABLE_DATE_SUN")
 dat <- dat[, !(names(dat) %in% drops_dayofweek)]
+
+dat$USABLE_DATE_HOLIDAY<-as.factor(dat$USABLE_DATE_HOLIDAY)
+dat$USABLE_DATE_BEFORE_HOLIDAY<-as.factor(dat$USABLE_DATE_BEFORE_HOLIDAY)
+dat$USABLE_DATE_Weekday<-as.factor(dat$USABLE_DATE_Weekday)
+dat$USABLE_DATE_Weekend<-as.factor(dat$USABLE_DATE_Weekend)
 ```
 
 ```{r}
@@ -245,10 +250,13 @@ dat$discgroup <- as.factor(dat$discgroup)
 dat $PRICE_RATE <- NULL
 ```
 
-drop user and coupon IDs
+drop user and coupon IDs & set as factor
 ```{r}
 dat$USER_ID_hash <- NULL
 dat$COUPON_ID_hash <- NULL
+
+dat$user_pref<-as.factor(dat$user_pref)
+dat$purchase<-as.factor(dat$purchase)
 ```
 
 ```{r}
