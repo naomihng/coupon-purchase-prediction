@@ -84,8 +84,8 @@ names(list_train)[names(list_train)=="en_ken"] <- "coupon_pref"
 
 Selecting more relevant columns to reduce dataframe size
 ```{r}
-list_train <- subset(list_train, select=c(COUPON_ID_hash,en_capsule,en_genre,PRICE_RATE,CATALOG_PRICE,DISCOUNT_PRICE,VALIDPERIOD,en_small_area,coupon_pref))
-user_list <- subset(user_list,select = c(USER_ID_hash,AGE,SEX_ID,user_pref))
+# list_train <- subset(list_train, select=c(COUPON_ID_hash,en_capsule,en_genre,PRICE_RATE,CATALOG_PRICE,DISCOUNT_PRICE,VALIDPERIOD,en_small_area,coupon_pref))
+# user_list <- subset(user_list,select = c(USER_ID_hash,AGE,SEX_ID,user_pref))
 ```
 
 There are missing prefecture data in user_list. Why are there missing residential addresses? Have these users purchased something?
@@ -152,6 +152,13 @@ merge visit, user characteristics, coupon characteristics
 dat <-merge(list_train,visit.info, by.x = "COUPON_ID_hash",by.y = "VIEW_COUPON_ID_hash")
 dat <-merge(dat, user_list, by="USER_ID_hash")
 
+drops <- c("large_area_name","ken_name","small_area_name","GENRE_NAME", "DISPFROM","DISPEND","VALIDFROM","VALIDEND","PREF_NAME","REG_DATE" ,"WITHDRAW_DATE", "CAPSULE_TEXT")
+dat <- dat[, !(names(dat) %in% drops)]
+
+```
+
+
+```{r}
 write.csv(dat, paste0(dir,"visit_user_coupon.csv"), row.names = F)
 ```
 
@@ -172,7 +179,10 @@ dat <- merge(dat, pref_locations, by.x = "coupon_pref", by.y = "en_PREF_NAME", a
 names(pref_locations) <- c("user_LATITUDE", "user_LONGITUDE", "en_PREF_NAME")
 dat <- merge(dat, pref_locations, by.x = "user_pref", by.y = "en_PREF_NAME", all.x = TRUE)
 
-test <- distm(dat[,c("coupon_LONGITUDE","coupon_LATITUDE")], dat[,c("user_LONGITUDE","user_LATITUDE")], fun = distHaversine)
+dat$user.coupon.dist <- sqrt(I(dat$coupon_LATITUDE - dat$user_LATITUDE)^2 + I(dat$coupon_LONGITUDE - dat$user_LONGITUDE)^2)
+
+drops_latlon <- c("coupon_LATITUDE","user_LATITUDE","coupon_LONGITUDE","user_LONGITUDE")
+dat <- dat[, !(names(dat) %in% drops_latlon)]
 ```
 
 most frequently visited genre
@@ -183,7 +193,6 @@ mode.genre <- dat %>%
 
 dat <- merge(dat, mode.genre,by = "USER_ID_hash",all.x = TRUE)
 ```
-
 
 distance between user and coupon nearest branch prefecture
 ```{r}
@@ -197,7 +206,6 @@ mode.gender <- dat %>%
   summarize(mode.visit.gender = getmode(SEX_ID))
 
 dat <- merge(dat, mode.gender,by = "COUPON_ID_hash",all.x = TRUE)
-# for decision tree: use matched flag or just leave as two columns?
 ```
 
 most frequent age group viewing coupons
@@ -212,19 +220,72 @@ mode.agegroup <- dat %>%
 dat <- merge(dat, mode.agegroup, by = "COUPON_ID_hash",all.x = TRUE)
 ```
 
+Get weekend, weekday flags. NA is converted to 1 because if not given, it is usable every day.
+```{r}
+dat$USABLE_DATE_Weekday<-ifelse(dat$USABLE_DATE_FRI!=0|dat$USABLE_DATE_THU!=0|dat$USABLE_DATE_WED!=0|dat$USABLE_DATE_TUE!=0|dat$USABLE_DATE_MON!=0,1,0)
+dat$USABLE_DATE_Weekday[is.na(dat$USABLE_DATE_Weekday)] <- 1
+dat$USABLE_DATE_Weekend<-ifelse(dat$USABLE_DATE_SAT!=0|dat$USABLE_DATE_SUN!=0,1,0)
+dat$USABLE_DATE_Weekday[is.na(dat$USABLE_DATE_Weekend)] <- 1
+dat$USABLE_DATE_HOLIDAY<-ifelse(dat$USABLE_DATE_HOLIDAY!=0,1,0)
+dat$USABLE_DATE_HOLIDAY[is.na(dat$USABLE_DATE_Weekday)] <- 1
+dat$USABLE_DATE_BEFORE_HOLIDAY<-ifelse(dat$USABLE_DATE_BEFORE_HOLIDAY!=0,1,0)
+dat$USABLE_DATE_BEFORE_HOLIDAY[is.na(dat$USABLE_DATE_Weekday)] <- 1
+
+drops_dayofweek <- c("USABLE_DATE_MON","USABLE_DATE_TUE","USABLE_DATE_WED","USABLE_DATE_THU", "USABLE_DATE_FRI","USABLE_DATE_SAT","USABLE_DATE_SUN")
+dat <- dat[, !(names(dat) %in% drops_dayofweek)]
+```
+
+```{r}
+library(ggplot2)
+table(dat$PRICE_RATE)
+ggplot(dat) + geom_bar(aes(x=PRICE_RATE), fill="blue")
+dat$discgroup <- ifelse(dat$PRICE_RATE <= 55, "LOW", "HIGH")
+dat$discgroup <- as.factor(dat$discgroup)
+dat $PRICE_RATE <- NULL
+```
+
+drop user and coupon IDs
+```{r}
+dat$USER_ID_hash <- NULL
+dat$COUPON_ID_hash <- NULL
+```
+
+```{r}
+write.csv(dat, paste0(dir,"visit_user_coupon_features.csv"), row.names = F)
+```
 
 ## Split into test and train dataset
+
 ```{r}
-set.seed(123)
-sample <- sample(c(TRUE, FALSE), nrow(dat), prob=c(0.7,0.3), replace=TRUE)
-train <- dat[sample,]
+dat <- read.csv(paste0(dir,"visit_user_coupon_features.csv"))
+```
+
+```{r}
+set.seed(4217)
+sample <- sample(sample(c(TRUE,FALSE),nrow(dat),prob = c(0.70,0.30),replace = TRUE))
 test <- dat[!sample,]
+train <- dat[sample,]
 
 write.csv(train, paste0(dir,"visit_train.csv"), row.names = F)
 write.csv(test, paste0(dir,"visit_test.csv"), row.names = F)
 ```
 
 ```{r}
+library(caret)
+ctrl <- trainControl(method = "repeatedcv", number = 10,savePredictions = TRUE)
+log_fit <- train(match ~ .,  data=trainData, method="LogitBoost", family="binomial",trControl = ctrl)
+predictors(log_fit)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
 
 ```
 
@@ -239,3 +300,12 @@ write.csv(test, paste0(dir,"visit_test.csv"), row.names = F)
 ```{r}
 
 ```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
