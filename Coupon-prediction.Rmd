@@ -228,9 +228,9 @@ dat$USABLE_DATE_Weekday[is.na(dat$USABLE_DATE_Weekday)] <- 1
 dat$USABLE_DATE_Weekend<-ifelse(dat$USABLE_DATE_SAT!=0|dat$USABLE_DATE_SUN!=0,1,0)
 dat$USABLE_DATE_Weekend[is.na(dat$USABLE_DATE_Weekend)] <- 1
 dat$USABLE_DATE_HOLIDAY<-ifelse(dat$USABLE_DATE_HOLIDAY!=0,1,0)
-dat$USABLE_DATE_HOLIDAY[is.na(dat$USABLE_DATE_Weekday)] <- 1
+dat$USABLE_DATE_HOLIDAY[is.na(dat$USABLE_DATE_HOLIDAY)] <- 1
 dat$USABLE_DATE_BEFORE_HOLIDAY<-ifelse(dat$USABLE_DATE_BEFORE_HOLIDAY!=0,1,0)
-dat$USABLE_DATE_BEFORE_HOLIDAY[is.na(dat$USABLE_DATE_Weekday)] <- 1
+dat$USABLE_DATE_BEFORE_HOLIDAY[is.na(dat$USABLE_DATE_BEFORE_HOLIDAY)] <- 1
 
 drops_dayofweek <- c("USABLE_DATE_MON","USABLE_DATE_TUE","USABLE_DATE_WED","USABLE_DATE_THU", "USABLE_DATE_FRI","USABLE_DATE_SAT","USABLE_DATE_SUN")
 dat <- dat[, !(names(dat) %in% drops_dayofweek)]
