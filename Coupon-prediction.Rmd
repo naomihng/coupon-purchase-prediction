@@ -171,13 +171,13 @@ distance between user and coupon default prefecture
 ```{r}
 library(geosphere)
 
-pref_locations <- pref_locations[,c("LATITUDE", "LONGITUDE", "en_PREF_NAME")]
+prefs <- pref_locations[,c("LATITUDE", "LONGITUDE", "en_PREF_NAME")]
 
-names(pref_locations) <- c("coupon_LATITUDE", "coupon_LONGITUDE", "en_PREF_NAME")
-dat <- merge(dat, pref_locations, by.x = "coupon_pref", by.y = "en_PREF_NAME", all.x = TRUE)
+names(prefs) <- c("coupon_LATITUDE", "coupon_LONGITUDE", "en_PREF_NAME")
+dat <- merge(dat, prefs, by.x = "coupon_pref", by.y = "en_PREF_NAME", all.x = TRUE)
 
-names(pref_locations) <- c("user_LATITUDE", "user_LONGITUDE", "en_PREF_NAME")
-dat <- merge(dat, pref_locations, by.x = "user_pref", by.y = "en_PREF_NAME", all.x = TRUE)
+names(prefs) <- c("user_LATITUDE", "user_LONGITUDE", "en_PREF_NAME")
+dat <- merge(dat, prefs, by.x = "user_pref", by.y = "en_PREF_NAME", all.x = TRUE)
 
 dat$user.coupon.dist <- sqrt(I(dat$coupon_LATITUDE - dat$user_LATITUDE)^2 + I(dat$coupon_LONGITUDE - dat$user_LONGITUDE)^2)
 
@@ -197,6 +197,7 @@ dat <- merge(dat, mode.genre,by = "USER_ID_hash",all.x = TRUE)
 distance between user and coupon nearest branch prefecture
 ```{r}
 coupon_branches <- unique(area_train[,c("COUPON_ID_hash", "en_pref")])
+#WIP
 ```
 
 most frequent gender viewing coupons
@@ -225,7 +226,7 @@ Get weekend, weekday flags. NA is converted to 1 because if not given, it is usa
 dat$USABLE_DATE_Weekday<-ifelse(dat$USABLE_DATE_FRI!=0|dat$USABLE_DATE_THU!=0|dat$USABLE_DATE_WED!=0|dat$USABLE_DATE_TUE!=0|dat$USABLE_DATE_MON!=0,1,0)
 dat$USABLE_DATE_Weekday[is.na(dat$USABLE_DATE_Weekday)] <- 1
 dat$USABLE_DATE_Weekend<-ifelse(dat$USABLE_DATE_SAT!=0|dat$USABLE_DATE_SUN!=0,1,0)
-dat$USABLE_DATE_Weekday[is.na(dat$USABLE_DATE_Weekend)] <- 1
+dat$USABLE_DATE_Weekend[is.na(dat$USABLE_DATE_Weekend)] <- 1
 dat$USABLE_DATE_HOLIDAY<-ifelse(dat$USABLE_DATE_HOLIDAY!=0,1,0)
 dat$USABLE_DATE_HOLIDAY[is.na(dat$USABLE_DATE_Weekday)] <- 1
 dat$USABLE_DATE_BEFORE_HOLIDAY<-ifelse(dat$USABLE_DATE_BEFORE_HOLIDAY!=0,1,0)
