@@ -16,7 +16,7 @@ dir <- './data/'
 area_train <- read.csv(paste0(dir,"coupon_area_train_en.csv")) #translated to en
 list_train <- read.csv(paste0(dir,"coupon_list_train_en.csv")) #translated to en
 user_list <- read.csv(paste0(dir,"user_list_en.csv"), na.strings=c("", NA))
-pref_location <- read.csv(paste0(dir,"prefecture_locations.csv"))
+pref_locations <- read.csv(paste0(dir,"prefecture_locations_en.csv"))
 visit <- read.csv(paste0(dir,"coupon_view_3months.csv"))
 
 detail_train <- read.csv(paste0(dir,"coupon_detail_train_en.csv"))
@@ -144,16 +144,37 @@ Summarizing into unique coupon-user pairs, in that users who eventually bought w
 ```{r}
 visit.info<- visit %>%
   group_by(VIEW_COUPON_ID_hash,USER_ID_hash)%>%
-  summarise(purchase = max(PURCHASE_FLG))
+  summarise(purchase = max(PURCHASE_FLG), view_count = n())
 ```
 
 merge visit, user characteristics, coupon characteristics
 ```{r}
 dat <-merge(list_train,visit.info, by.x = "COUPON_ID_hash",by.y = "VIEW_COUPON_ID_hash")
 dat <-merge(dat, user_list, by="USER_ID_hash")
+
+write.csv(dat, paste0(dir,"visit_user_coupon.csv"), row.names = F)
 ```
 
 # Feature Engineering
+```{r}
+dat <- read.csv(paste0(dir,"visit_user_coupon.csv"))
+```
+
+distance between user and coupon default prefecture
+```{r}
+library(geosphere)
+
+pref_locations <- pref_locations[,c("LATITUDE", "LONGITUDE", "en_PREF_NAME")]
+
+names(pref_locations) <- c("coupon_LATITUDE", "coupon_LONGITUDE", "en_PREF_NAME")
+dat <- merge(dat, pref_locations, by.x = "coupon_pref", by.y = "en_PREF_NAME", all.x = TRUE)
+
+names(pref_locations) <- c("user_LATITUDE", "user_LONGITUDE", "en_PREF_NAME")
+dat <- merge(dat, pref_locations, by.x = "user_pref", by.y = "en_PREF_NAME", all.x = TRUE)
+
+test <- distm(dat[,c("coupon_LONGITUDE","coupon_LATITUDE")], dat[,c("user_LONGITUDE","user_LATITUDE")], fun = distHaversine)
+```
+
 most frequently visited genre
 ```{r}
 mode.genre <- dat %>% 
@@ -163,19 +184,32 @@ mode.genre <- dat %>%
 dat <- merge(dat, mode.genre,by = "USER_ID_hash",all.x = TRUE)
 ```
 
-distance between user and coupon default prefecture
-```{r}
-
-```
 
 distance between user and coupon nearest branch prefecture
 ```{r}
-
+coupon_branches <- unique(area_train[,c("COUPON_ID_hash", "en_pref")])
 ```
 
-number of times coupon viewed
+most frequent gender viewing coupons
 ```{r}
+mode.gender <- dat %>% 
+  group_by(COUPON_ID_hash) %>%
+  summarize(mode.visit.gender = getmode(SEX_ID))
 
+dat <- merge(dat, mode.gender,by = "COUPON_ID_hash",all.x = TRUE)
+# for decision tree: use matched flag or just leave as two columns?
+```
+
+most frequent age group viewing coupons
+```{r}
+dat$age_group<-cut(dat$AGE, 
+                          breaks = c(15, 22, 30, 40, 50, 60, 85), 
+                          labels = c("15 to 21", "22 to 29", "30 to 39", "40 to 49", "50 to 59", "60 to 85"), 
+                          right = FALSE)
+mode.agegroup <- dat %>% 
+  group_by(COUPON_ID_hash) %>%
+  summarize(mode.visit.agegroup = getmode(age_group))
+dat <- merge(dat, mode.agegroup, by = "COUPON_ID_hash",all.x = TRUE)
 ```
 
 
