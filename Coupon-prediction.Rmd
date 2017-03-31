@@ -161,7 +161,7 @@ dat <- dat[, !(names(dat) %in% drops)]
 write.csv(dat, paste0(dir,"visit_user_coupon.csv"), row.names = F)
 ```
 
-#Coupon data exploration
+# Coupon data exploration
 ```{r}
 dat <- read.csv(paste0(dir,"visit_user_coupon.csv"))
 ```
