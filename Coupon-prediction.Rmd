@@ -259,6 +259,23 @@ dat$user_pref<-as.factor(dat$user_pref)
 dat$purchase<-as.factor(dat$purchase)
 ```
 
+removal of NAs
+```{r}
+dat<-dat %>% 
+  group_by(en_genre) %>% 
+  mutate(VALIDPERIOD= replace(VALIDPERIOD, is.na(VALIDPERIOD), mean(VALIDPERIOD, na.rm=TRUE)))
+
+dat$user.coupon.dist<-as.numeric(dat$user.coupon.dist)
+
+dat<-dat %>% 
+  group_by(age_group) %>% 
+  mutate(user.coupon.dist= replace(user.coupon.dist, is.na(user.coupon.dist), mean(user.coupon.dist, na.rm=TRUE)))
+
+dat$user_pref<-as.character(dat$user_pref)
+dat$user_pref[is.na(dat$user_pref)]<-"Unknown"
+dat$user_pref<-as.factor(dat$user_pref)
+```
+
 ```{r}
 write.csv(dat, paste0(dir,"visit_user_coupon_features.csv"), row.names = F)
 ```
