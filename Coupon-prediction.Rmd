@@ -157,10 +157,104 @@ dat <- dat[, !(names(dat) %in% drops)]
 
 ```
 
-
 ```{r}
 write.csv(dat, paste0(dir,"visit_user_coupon.csv"), row.names = F)
 ```
+
+#Coupon data exploration
+```{r}
+dat <- read.csv(paste0(dir,"visit_user_coupon.csv"))
+```
+List price
+  (a) Relationship between discount rates and coupon genres
+```{r}
+ggplot(dat, aes(x=en_genre)) + geom_bar(aes(fill=discgroup), position="fill") + geom_point(aes(y=-0.05), size=0.75,alpha=0.3,position=position_jitter(h=0.01)) + ggtitle("Proportion of discount rates in each genre") + labs(x= "Genre", y="%") + theme(axis.text.x=element_text(angle=90,size=10,vjust = 0.5))
+
+#Lower discount rates are more commonly offered for these coupon genres: Food, hotel and Japanese hotel, and leisure. 
+#Food, hotel and Japanese hotel coupon genres are among the top 3 most visited coupons, which could explain why lower discount rates are given since demand for these coupons are high based on visit frequencies. 
+#High discount rates are more commonly offered for the other genres. Beauty genre offers 100% high discount rates. However, it can also be observed that the number of visits of coupon genres, beauty coupons had 0 visits. 
+
+#Does age (spending power) affect purchases by coupon genres?
+ggplot(dat) + geom_boxplot(aes(x=en_genre,y=AGE)) + ggtitle("Boxplot of users' age by genre") + labs(x="Genre", y="Age") + theme(axis.text.x=element_text(angle=90,size=10,vjust = 0.5))
+
+#For beauty coupons, it is evident that the age of users are relatively younger, which infers that these users may have lesser purchasing power than older users, thus higher discount rates are offered to encourage purchase of beauty coupons. 
+#Hotel and Japanese hotel, and leisure coupons have relatively higher age groups, albeit slightly, which is reasonable given that these coupon genres have lower discount rates. Food coupons do not seem to have relatively higher age groups, this could be because food coupons are more generic and applicable to all age groups. 
+```  
+
+Most visited coupons #DELETE AFTER SHOWING TEAM
+```{r}
+library(ggplot2)
+
+#delll
+ggplot(dat) + geom_bar(aes(x=most_vist), fill="orange") + coord_flip() + theme(axis.text.y=element_text(size = rel(0.8)))
+
+#Top 3 most visited coupon genres in descending order: Delivery service, food, hotel and Japanese hotel. 
+#Top 2 most visited coupons genre == Top 2 most purchased coupons genre
+
+#only purchased coupons
+ggplot(dat[dat$purchase==1,]) + geom_bar(aes(x=most_vist), fill="orange") + coord_flip() + theme(axis.text.y=element_text(size = rel(0.8)))
+```
+
+  (b) Relationship between list price and discount rates (PRICE_RATE is no longer available in nic's csv)
+```{r}
+ggplot(data=dat, aes(x=CATALOG_PRICE,y=PRICE_RATE)) + geom_point() + stat_smooth(method="lm") + labs(x = "List price", y="Discount rate") + ggtitle("Discount rate v List price") + ylim(50,100) 
+
+#Based on the scatterplot, there does not seem to be an obvious correlation between the list price and discount rates, which means that discount rates are not given based on the list prices of coupons. 
+```
+
+  (c) Relationship of list price against periods
+```{r}
+#List price v Display period
+ggplot(data=dat, aes(x=DISPPERIOD,y=CATALOG_PRICE,color=en_genre)) + geom_point() + xlim(0,15) + labs(x="Display Period", y="List Price") + ggtitle("List price against Display period")
+
+#Display period of coupons do not seem to have an effect on list price. A small effect is observed only when display period is for 1 day, then list price is substantially lower than when display period is for 2 days, as shown by the clustering of list prices to the lower values when display period==1. 
+
+#List price v Valid period
+ggplot(data=dat2, aes(x=VALIDPERIOD,y=CATALOG_PRICE,color=en_genre)) + geom_point() + xlim(0,15) + ylim(0, 12500) + labs(x="Valid Period", y="List Price") + ggtitle("List price against Valid period")
+
+#No correlation is observed
+
+#List price v Total display and valid period
+dat$total.period <- dat$DISPPERIOD + dat$VALIDPERIOD
+
+ggplot(data=dat, aes(x=total.period,y=CATALOG_PRICE,color=en_genre)) + geom_point() + xlim(0,15) + ylim(0, 12500) + labs(x="Display Period + Valid Period", y="List Price") + ggtitle("List price against Total period")
+
+#List price do not seem to be strongly influenced by display period nor valid period.
+```
+
+Purchased coupons
+  (a) Views and purchases in each genre
+```{r}
+ggplot(dat, aes(x=en_genre)) + geom_bar(aes(fill=purchase)) + geom_point(aes(y=-0.05), size=0.75,alpha=0.3,position=position_jitter(h=0.01)) + ggtitle("Number of coupons viewed and purchased in each genre") + labs(x= "Genre", y="Number") + theme(axis.text.x=element_text(angle=90,size=10,vjust = 0.5))
+
+#Proportion of purchased coupons are low as compared to visits to a coupon without a purchase. 
+
+#Number of purchased coupons by genre
+ggplot(dat[dat$purchase==1,], aes(x=en_genre)) + geom_bar(aes(fill=purchase)) + geom_point(aes(y=-0.05), size=0.75,alpha=0.3,position=position_jitter(h=0.01)) + ggtitle("Number of purchases in each genre") + labs(x= "Genre", y="Number") + theme(axis.text.x=element_text(angle=90,size=10,vjust = 0.5))
+
+#Top 3 purchased coupons: Delivery service, food, other coupon
+#This is reasonable given that delivery service and food coupons are amongst the top 3 visited coupon genres as well.
+```
+
+  (b) Relationship of Display and Valid preiod against purchased coupons. 
+```{r}
+#Purchase flag v Display period
+ggplot(dat[dat$purchase==1,], aes(x=DISPPERIOD)) + geom_bar(aes()) + geom_point(aes(y=-0.05), size=0.75,alpha=0.3,position=position_jitter(h=0.01)) + ggtitle("Purchases by Display Periods") + labs(x= "Display period", y="Number") + theme(axis.text.x=element_text(angle=90,size=10,vjust = 0.5))
+
+#Highest number of purchases is observed when display period is at 4 days. A normal distribution is observed.?
+
+#Purchase flag v Valid period
+ggplot(dat[dat$purchase==1,], aes(x=VALIDPERIOD)) + geom_bar(aes()) + geom_point(aes(y=-0.05), size=0.75,alpha=0.3,position=position_jitter(h=0.01)) + ylim(0,500) + ggtitle("Purchases by Valid Periods") + labs(x= "Valid Period", y="Number") + theme(axis.text.x=element_text(angle=90,size=10,vjust = 0.5))
+
+#No observable pattern
+
+#Purchase flag v Total display and valid period
+ggplot(dat[dat$purchase==1,], aes(x=total.period)) + geom_bar(aes()) + geom_point(aes(y=-0.05), size=0.75,alpha=0.3,position=position_jitter(h=0.01)) + ylim(0,500) + ggtitle("Purchases by Total Period") + labs(x= "Display period + Valid period", y="Number") + theme(axis.text.x=element_text(angle=90,size=10,vjust = 0.5))
+#No observable pattern
+
+#A slight pattern can be observed with a higher likelihood of a purchase made when display period of a coupon is at 4 days.
+```
+
 
 # Feature Engineering
 ```{r}
