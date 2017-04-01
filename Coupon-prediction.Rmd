@@ -17,7 +17,7 @@ area_train <- read.csv(paste0(dir,"coupon_area_train_en.csv")) #translated to en
 list_train <- read.csv(paste0(dir,"coupon_list_train_en.csv")) #translated to en
 user_list <- read.csv(paste0(dir,"user_list_en.csv"), na.strings=c("", NA))
 pref_locations <- read.csv(paste0(dir,"prefecture_locations_en.csv"))
-visit <- read.csv(paste0(dir,"coupon_view_3months.csv"))
+visit <- read.csv(paste0(dir,"coupon_view_1month.csv"))
 
 detail_train <- read.csv(paste0(dir,"coupon_detail_train_en.csv"))
 
@@ -82,12 +82,6 @@ names(user_list)[names(user_list)=="en_pref"] <- "user_pref"
 names(list_train)[names(list_train)=="en_ken"] <- "coupon_pref"
 ```
 
-Selecting more relevant columns to reduce dataframe size
-```{r}
-# list_train <- subset(list_train, select=c(COUPON_ID_hash,en_capsule,en_genre,PRICE_RATE,CATALOG_PRICE,DISCOUNT_PRICE,VALIDPERIOD,en_small_area,coupon_pref))
-# user_list <- subset(user_list,select = c(USER_ID_hash,AGE,SEX_ID,user_pref))
-```
-
 There are missing prefecture data in user_list. Why are there missing residential addresses? Have these users purchased something?
 ```{r}
 cat(sum(is.na(user_list$user_pref)), "users with missing pref location\n")
@@ -101,6 +95,7 @@ cat(sum(user_list[is.na(user_list$user_pref), "USER_ID_hash" ] %in% unique(detai
 # sum( unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"] %in% user_list[is.na(user_list$user_pref), "USER_ID_hash" ]))
 
 ```
+
 Can we use SMALL_AREA_NAME to get prefecture name for the users without a residential prefecture recorded? SMALL_AREA_NAME is the "User redidential area name" according to Kaggle Data page, but a quick check revealed that the same user can be listed in multiple locations on the purchase log, yet have no registered address in the user list. How could that be?
 
 ```{r}
@@ -147,16 +142,16 @@ visit.info<- visit %>%
   summarise(purchase = max(PURCHASE_FLG), view_count = n())
 ```
 
-merge visit, user characteristics, coupon characteristics
+merge visit.info, user characteristics, coupon characteristics
+Drop irrelevant columns to reduce dataframe size
 ```{r}
 dat <-merge(list_train,visit.info, by.x = "COUPON_ID_hash",by.y = "VIEW_COUPON_ID_hash")
 dat <-merge(dat, user_list, by="USER_ID_hash")
 
-drops <- c("large_area_name","ken_name","small_area_name","GENRE_NAME", "DISPFROM","DISPEND","VALIDFROM","VALIDEND","PREF_NAME","REG_DATE" ,"WITHDRAW_DATE", "CAPSULE_TEXT")
+drops <- c("large_area_name","ken_name","small_area_name","GENRE_NAME", "DISPFROM","DISPEND","VALIDFROM","VALIDEND","PREF_NAME","REG_DATE" ,"WITHDRAW_DATE", "CAPSULE_TEXT", "en_large_area", "en_small_area")
 dat <- dat[, !(names(dat) %in% drops)]
 
 ```
-
 
 ```{r}
 write.csv(dat, paste0(dir,"visit_user_coupon.csv"), row.names = F)
@@ -169,7 +164,6 @@ dat <- read.csv(paste0(dir,"visit_user_coupon.csv"))
 
 distance between user and coupon default prefecture
 ```{r}
-library(geosphere)
 
 prefs <- pref_locations[,c("LATITUDE", "LONGITUDE", "en_PREF_NAME")]
 
@@ -181,8 +175,9 @@ dat <- merge(dat, prefs, by.x = "user_pref", by.y = "en_PREF_NAME", all.x = TRUE
 
 dat$user.coupon.dist <- sqrt(I(dat$coupon_LATITUDE - dat$user_LATITUDE)^2 + I(dat$coupon_LONGITUDE - dat$user_LONGITUDE)^2)
 
-drops_latlon <- c("coupon_LATITUDE","user_LATITUDE","coupon_LONGITUDE","user_LONGITUDE")
+drops_latlon <- c("coupon_LATITUDE","user_LATITUDE","coupon_LONGITUDE","user_LONGITUDE", "coupon_pref")
 dat <- dat[, !(names(dat) %in% drops_latlon)]
+
 ```
 
 most frequently visited genre
@@ -192,12 +187,20 @@ mode.genre <- dat %>%
   summarize(mode.visit.genre = getmode(en_genre))
 
 dat <- merge(dat, mode.genre,by = "USER_ID_hash",all.x = TRUE)
+
+##Genre Match
+dat$en_genre<-as.character(dat$en_genre)
+dat$mode.visit.genre<-as.character(dat$mode.visit.genre)
+dat$same.genre <- dat$en_genre==dat$mode.visit.genre
+
+dat$en_capsule <- NULL
+dat$mode.visit.genre <- NULL
 ```
 
 distance between user and coupon nearest branch prefecture
 ```{r}
-coupon_branches <- unique(area_train[,c("COUPON_ID_hash", "en_pref")])
 #WIP
+coupon_branches <- unique(area_train[,c("COUPON_ID_hash", "en_pref")])
 ```
 
 most frequent gender viewing coupons
@@ -207,6 +210,11 @@ mode.gender <- dat %>%
   summarize(mode.visit.gender = getmode(SEX_ID))
 
 dat <- merge(dat, mode.gender,by = "COUPON_ID_hash",all.x = TRUE)
+
+## If Match
+dat$same.gender <- dat$SEX_ID == dat$mode.visit.gender
+
+dat$mode.visit.gender<-NULL
 ```
 
 most frequent age group viewing coupons
@@ -219,6 +227,11 @@ mode.agegroup <- dat %>%
   group_by(COUPON_ID_hash) %>%
   summarize(mode.visit.agegroup = getmode(age_group))
 dat <- merge(dat, mode.agegroup, by = "COUPON_ID_hash",all.x = TRUE)
+
+## If Match
+dat$same.age.group <- dat$age_group == dat$mode.visit.agegroup
+
+dat$mode.visit.agegroup<-NULL
 ```
 
 Get weekend, weekday flags. NA is converted to 1 because if not given, it is usable every day.
@@ -242,42 +255,30 @@ dat$USABLE_DATE_Weekend<-as.factor(dat$USABLE_DATE_Weekend)
 ```
 
 ```{r}
-library(ggplot2)
-table(dat$PRICE_RATE)
-ggplot(dat) + geom_bar(aes(x=PRICE_RATE), fill="blue")
 dat$discgroup <- ifelse(dat$PRICE_RATE <= 55, "LOW", "HIGH")
 dat$discgroup <- as.factor(dat$discgroup)
-dat $PRICE_RATE <- NULL
+dat$PRICE_RATE <- NULL
 ```
 
-drop user and coupon IDs & set as factor
-```{r}
-<<<<<<< HEAD
-dat <-subset(dat,select = -c(USER_ID_hash, COUPON_ID_hash))
-=======
-dat$USER_ID_hash <- NULL
-dat$COUPON_ID_hash <- NULL
-
-dat$user_pref<-as.factor(dat$user_pref)
-dat$purchase<-as.factor(dat$purchase)
-```
-
-removal of NAs
+Remove NAs
 ```{r}
 dat<-dat %>% 
   group_by(en_genre) %>% 
-  mutate(VALIDPERIOD= replace(VALIDPERIOD, is.na(VALIDPERIOD), mean(VALIDPERIOD, na.rm=TRUE)))
+  mutate(VALIDPERIOD = replace(VALIDPERIOD, is.na(VALIDPERIOD), mean(VALIDPERIOD, na.rm=TRUE)))
 
-dat$user.coupon.dist<-as.numeric(dat$user.coupon.dist)
-
+dat$user.coupon.dist <- as.numeric(dat$user.coupon.dist)
 dat<-dat %>% 
   group_by(age_group) %>% 
   mutate(user.coupon.dist= replace(user.coupon.dist, is.na(user.coupon.dist), mean(user.coupon.dist, na.rm=TRUE)))
 
-dat$user_pref<-as.character(dat$user_pref)
-dat$user_pref[is.na(dat$user_pref)]<-"Unknown"
-dat$user_pref<-as.factor(dat$user_pref)
->>>>>>> 6835532a9069fd7762b677d253d8d7d3a7ce74ff
+dat$user_pref <- as.character(dat$user_pref)
+dat$user_pref[is.na(dat$user_pref)] <- "Unknown"
+dat$user_pref <- as.factor(dat$user_pref)
+```
+
+drop user and coupon IDs & set as factor
+```{r}
+dat <-subset(dat,select = -c(USER_ID_hash, COUPON_ID_hash))
 ```
 
 # insert code for more cleaning
@@ -293,6 +294,8 @@ dat <- read.csv(paste0(dir,"visit_user_coupon_features.csv"))
 ```
 
 ```{r}
+dat$purchase<-as.factor(dat$purchase)
+
 dat$USABLE_DATE_HOLIDAY<-as.factor(dat$USABLE_DATE_HOLIDAY)
 dat$USABLE_DATE_BEFORE_HOLIDAY<-as.factor(dat$USABLE_DATE_BEFORE_HOLIDAY)
 dat$USABLE_DATE_Weekday<-as.factor(dat$USABLE_DATE_Weekday)
