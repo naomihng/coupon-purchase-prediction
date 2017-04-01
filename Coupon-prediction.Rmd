@@ -247,9 +247,10 @@ dat $PRICE_RATE <- NULL
 
 drop user and coupon IDs
 ```{r}
-dat$USER_ID_hash <- NULL
-dat$COUPON_ID_hash <- NULL
+dat <-subset(dat,select = -c(USER_ID_hash, COUPON_ID_hash))
 ```
+
+# insert code for more cleaning
 
 ```{r}
 write.csv(dat, paste0(dir,"visit_user_coupon_features.csv"), row.names = F)
@@ -262,7 +263,33 @@ dat <- read.csv(paste0(dir,"visit_user_coupon_features.csv"))
 ```
 
 ```{r}
-set.seed(4217)
+dat$USABLE_DATE_HOLIDAY<-as.factor(dat$USABLE_DATE_HOLIDAY)
+dat$USABLE_DATE_BEFORE_HOLIDAY<-as.factor(dat$USABLE_DATE_BEFORE_HOLIDAY)
+dat$USABLE_DATE_Weekday<-as.factor(dat$USABLE_DATE_Weekday)
+dat$USABLE_DATE_Weekend<-as.factor(dat$USABLE_DATE_Weekend)
+dat$purchase<-as.factor(dat$purchase)
+
+feature.names <- names(dat)
+
+for (f in feature.names) {
+  if (class(dat[[f]])=="factor") {
+    levels <- unique(c(dat[[f]]))
+    dat[[f]] <- factor(dat[[f]],
+                   labels=make.names(levels))
+  }
+}
+```
+
+```{r}
+dat$X <- NULL
+```
+
+```{r}
+dat<-dat[ sample( -which( dat$purchase == 0 ) , 370000 ) , ]
+```
+
+```{r}
+set.seed(123)
 sample <- sample(sample(c(TRUE,FALSE),nrow(dat),prob = c(0.70,0.30),replace = TRUE))
 test <- dat[!sample,]
 train <- dat[sample,]
@@ -271,28 +298,54 @@ write.csv(train, paste0(dir,"visit_train.csv"), row.names = F)
 write.csv(test, paste0(dir,"visit_test.csv"), row.names = F)
 ```
 
+
 ```{r}
 library(caret)
-ctrl <- trainControl(method = "repeatedcv", number = 10,savePredictions = TRUE)
+```
+
+## Logistic Regression
+```{r}
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE, classProbs = TRUE)
 log_fit <- train(match ~ .,  data=trainData, method="LogitBoost", family="binomial",trControl = ctrl)
 predictors(log_fit)
 ```
 
+## Decision Tree
 ```{r}
 
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE, classProbs = TRUE)
+set.seed(4217)
+rpartTune <- train(purchase ~ ., data = train, method = "rpart", trControl = ctrl, parms=list(split='information'))
+rpartTune$finalModel
+
+plot(rpartTune$finalModel)
+
+rpartPred <- predict(rpartTune, train)
+summary(rpartPred)
+rpartPred
+rpartProbs <- predict(rpartTune, train, type = "prob")
+summary(rpartProbs)
+
+
+library(rattle)
+fancyRpartPlot(rpartTune$finalModel)
+
+library(ROCR)
+pr <- prediction(rpartProbs[,2], train$purchase)
+X<-performance(pr,measure= "prec", x.measure= "rec")
+performance(pr,measure= "prbe")
+plot(X)
+
+
+
+# confusionMatrix(rpartProbs$X2, train$purchase)
 ```
 
 ```{r}
+library(doMC)
 
 ```
 
-```{r}
-
-```
-
-```{r}
-
-```
 
 ```{r}
 
