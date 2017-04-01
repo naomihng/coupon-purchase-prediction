@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 This project aims to predict a coupon purchase if a user views a coupon. To achieve this, variables that affect users' purchase decisions will be determined. 
 Data sets are obtained from Kaggle's "Coupon Purchase Prediction" challenge, in which the coupon purchases are to be predicted based on past coupons' viewing data released by Recruit Ponpare, a Japanese coupon site. 
 
-Flow of report:
+# Flow of report
 This report will first seek to understand the various data sets provided by Kaggle's "Coupon Purchase Prediction". Then the data will require cleaning, such as the removal of NAs and the reduction of data size to facilitate faster system time for running of data. With the cleaned data, exploration will be conducted to identify relationships between various variables and the purchase of coupons. Next, features for classification models will be engineered and these classification models will be used to model the coupon purchase prediction case. A comparison amongst the various models will be conducted at the end of the report to determine the most accurate and best fit classification model. Last but not least, recommendations to encourage and improve users' purchase of coupons will be suggested for Recruit Ponpare to use. 
 
 ```{r}
@@ -174,6 +174,7 @@ dat <- read.csv(paste0(dir,"visit_user_coupon.csv"))
 List price
   (a) Relationship between discount rates and coupon genres
 ```{r}
+library(ggplot2)
 ggplot(dat, aes(x=en_genre)) + geom_bar(aes(fill=discgroup), position="fill") + geom_point(aes(y=-0.05), size=0.75,alpha=0.3,position=position_jitter(h=0.01)) + ggtitle("Proportion of discount rates in each genre") + labs(x= "Genre", y="%") + theme(axis.text.x=element_text(angle=90,size=10,vjust = 0.5))
 ```
 Lower discount rates are more commonly offered for these coupon genres: Food, hotel and Japanese hotel, and leisure. 
@@ -191,7 +192,6 @@ Hotel and Japanese hotel, and leisure coupons have relatively higher age groups,
 
 Most visited coupons #DELETE AFTER SHOWING TEAM
 ```{r}
-library(ggplot2)
 
 #delll
 ggplot(dat) + geom_bar(aes(x=most_vist), fill="orange") + coord_flip() + theme(axis.text.y=element_text(size = rel(0.8)))
