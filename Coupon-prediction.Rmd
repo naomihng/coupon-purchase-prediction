@@ -28,6 +28,12 @@ detail_train <- read.csv(paste0(dir,"coupon_detail_train_en.csv"))
 # visit_train <- visit_train[visit_train$PURCHASE_FLG!=1,c("VIEW_COUPON_ID_hash","USER_ID_hash")]
 ```
 
+Rename columns to differentiate user and coupon prefecture
+```{r}
+names(user_list)[names(user_list)=="en_pref"] <- "user_pref"
+names(list_train)[names(list_train)=="en_ken"] <- "coupon_pref"
+```
+
 ## Understanding coupon area train data
 each COUPON_ID_hash can have multiple rows. selecting one example of COUPON_ID_hash reveals that each coupon can be listed for multiple locations.
 ```{r}
@@ -76,11 +82,6 @@ str(user_list)
 ```
 
 ## Data cleaning/wrangling
-Rename columns to differentiate user and coupon prefecture
-```{r}
-names(user_list)[names(user_list)=="en_pref"] <- "user_pref"
-names(list_train)[names(list_train)=="en_ken"] <- "coupon_pref"
-```
 
 There are missing prefecture data in user_list. Why are there missing residential addresses? Have these users purchased something?
 ```{r}
