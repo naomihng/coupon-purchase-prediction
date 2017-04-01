@@ -228,12 +228,17 @@ dat$USABLE_DATE_Weekday[is.na(dat$USABLE_DATE_Weekday)] <- 1
 dat$USABLE_DATE_Weekend<-ifelse(dat$USABLE_DATE_SAT!=0|dat$USABLE_DATE_SUN!=0,1,0)
 dat$USABLE_DATE_Weekend[is.na(dat$USABLE_DATE_Weekend)] <- 1
 dat$USABLE_DATE_HOLIDAY<-ifelse(dat$USABLE_DATE_HOLIDAY!=0,1,0)
-dat$USABLE_DATE_HOLIDAY[is.na(dat$USABLE_DATE_Weekday)] <- 1
+dat$USABLE_DATE_HOLIDAY[is.na(dat$USABLE_DATE_HOLIDAY)] <- 1
 dat$USABLE_DATE_BEFORE_HOLIDAY<-ifelse(dat$USABLE_DATE_BEFORE_HOLIDAY!=0,1,0)
-dat$USABLE_DATE_BEFORE_HOLIDAY[is.na(dat$USABLE_DATE_Weekday)] <- 1
+dat$USABLE_DATE_BEFORE_HOLIDAY[is.na(dat$USABLE_DATE_BEFORE_HOLIDAY)] <- 1
 
 drops_dayofweek <- c("USABLE_DATE_MON","USABLE_DATE_TUE","USABLE_DATE_WED","USABLE_DATE_THU", "USABLE_DATE_FRI","USABLE_DATE_SAT","USABLE_DATE_SUN")
 dat <- dat[, !(names(dat) %in% drops_dayofweek)]
+
+dat$USABLE_DATE_HOLIDAY<-as.factor(dat$USABLE_DATE_HOLIDAY)
+dat$USABLE_DATE_BEFORE_HOLIDAY<-as.factor(dat$USABLE_DATE_BEFORE_HOLIDAY)
+dat$USABLE_DATE_Weekday<-as.factor(dat$USABLE_DATE_Weekday)
+dat$USABLE_DATE_Weekend<-as.factor(dat$USABLE_DATE_Weekend)
 ```
 
 ```{r}
@@ -245,9 +250,34 @@ dat$discgroup <- as.factor(dat$discgroup)
 dat $PRICE_RATE <- NULL
 ```
 
-drop user and coupon IDs
+drop user and coupon IDs & set as factor
 ```{r}
+<<<<<<< HEAD
 dat <-subset(dat,select = -c(USER_ID_hash, COUPON_ID_hash))
+=======
+dat$USER_ID_hash <- NULL
+dat$COUPON_ID_hash <- NULL
+
+dat$user_pref<-as.factor(dat$user_pref)
+dat$purchase<-as.factor(dat$purchase)
+```
+
+removal of NAs
+```{r}
+dat<-dat %>% 
+  group_by(en_genre) %>% 
+  mutate(VALIDPERIOD= replace(VALIDPERIOD, is.na(VALIDPERIOD), mean(VALIDPERIOD, na.rm=TRUE)))
+
+dat$user.coupon.dist<-as.numeric(dat$user.coupon.dist)
+
+dat<-dat %>% 
+  group_by(age_group) %>% 
+  mutate(user.coupon.dist= replace(user.coupon.dist, is.na(user.coupon.dist), mean(user.coupon.dist, na.rm=TRUE)))
+
+dat$user_pref<-as.character(dat$user_pref)
+dat$user_pref[is.na(dat$user_pref)]<-"Unknown"
+dat$user_pref<-as.factor(dat$user_pref)
+>>>>>>> 6835532a9069fd7762b677d253d8d7d3a7ce74ff
 ```
 
 # insert code for more cleaning
