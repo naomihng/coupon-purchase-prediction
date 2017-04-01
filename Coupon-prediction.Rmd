@@ -7,17 +7,41 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+#Business Case
+Companies like Groupon help companies to generate demand by offering coupons to the consumers, usually offering them at a discounted rate. Consumers /users information could be collected and analyses to recommend coupons that the users are likely to use. This analysis on coupon prediction has a wide-ranging application as: 
+1)	There is a cost to recommending a coupon  
+a.	Cost of emailing the consumers
+b.	Opportunity cost of using the space on the app for other advertisement 
+2)	There is a benefit to recommending the correct coupon 
+a.	Earning commission when the user use the coupon
+b.	Having a good reputation of getting users to buy the recommended coupons 
+In this case, we seek to use the Kaggle dataset on Pompare Coupon recommendation dataset to: 
+1)	Understand what are some variables that incentives people to purchase the coupons. 
+2)	Predict how likely is someone going to purchase given that they view. 
+Using the prediction, we can understand how likely will they buy the coupon if they view it. Together with another model to understand the probability each user view the coupons, we can recommend coupons to the users. This aims to reduce the cost of emailing the unsuitable coupons to the customers and earning greater commission as users used our recommended coupons. 
+
+
 ```{r}
 library(dplyr)
+library(lubridate)
+library(readr)
 ```
 
 ```{r}
 dir <- './data/'
+visit <- read_csv(paste0(dir,"coupon_visit_train.csv"))
+#test data for view log
+date1 <- as.POSIXct("2012-05-24 00:00:00")
+date2 <- as.POSIXct("2012-06-24 00:00:00")
+int <- interval(date1, date2)
+visit <- visit[visit$I_DATE %within% int,]
+write_csv(visit, paste0(dir,"coupon_view_1month.csv"))
+
 area_train <- read.csv(paste0(dir,"coupon_area_train_en.csv")) #translated to en
 list_train <- read.csv(paste0(dir,"coupon_list_train_en.csv")) #translated to en
 user_list <- read.csv(paste0(dir,"user_list_en.csv"), na.strings=c("", NA))
 pref_locations <- read.csv(paste0(dir,"prefecture_locations_en.csv"))
-visit <- read.csv(paste0(dir,"coupon_view_1month.csv"))
+#visit <- read.csv(paste0(dir,"coupon_view_1month.csv"))
 
 detail_train <- read.csv(paste0(dir,"coupon_detail_train_en.csv"))
 
@@ -288,6 +312,19 @@ dat <-subset(dat,select = -c(USER_ID_hash, COUPON_ID_hash))
 write.csv(dat, paste0(dir,"visit_user_coupon_features.csv"), row.names = F)
 ```
 
+#Modelling 
+Our approach to modelling are: 
+1)	Spilt data into 70% train, 30% test 
+2)	Apply 10-fold cross validation on the training data 
+3)	Apply various models on the cross validated training data 
+4)	Evaluate different models using the performance measure 
+a.	Performance measure chosen: Area under Precision Recall curve 
+b.	Reason: Precision recall aims to measure how efficient and precise the model, and measure whether we are recommending the suitable coupons to the customers and out of all the suitable coupons for the customers, how many are we recommending 
+5)	Select the best model and apply it to the dataset
+6)	Report the generalized performance of the model when new data is added (30% test) 
+
+
+
 If reading new file:
 ```{r}
 dat <- read.csv(paste0(dir,"visit_user_coupon_features.csv"))
@@ -346,12 +383,6 @@ auc_pr<- function(obs, pred) {
 }
 ```
 
-## Logistic Regression
-```{r}
-ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE, classProbs = TRUE)
-log_fit <- train(match ~ .,  data=trainData, method="LogitBoost", family="binomial",trControl = ctrl)
-predictors(log_fit)
-```
 
 ## Decision Tree
 ```{r}
@@ -389,8 +420,65 @@ library(rpart.plot)
 prp(dtree.rpart, type=2, extra=104, fallen.leaves = TRUE, main="Decision Tree")
 ```
 
+##Logistic Regression
+```{r}
+ctrl <- trainControl(method = "repeatedcv", number = 10,savePredictions = TRUE)
+set.seed(4217)
+log_fit <- train(purchase ~ .,  data=train, method="glmnet",trControl = ctrl)
+predictors(log_fit)
+plot(varImp(log_fit))
+log_pred <- predict(log_fit,newdata = train,type="prob")
+
+pr <- prediction(log_pred$`1`, train$purchase)
+log<-performance(pr,measure= "prec", x.measure= "rec")
+plot(log, col= "orange")
+```
 
 
+## Naive Bayes
+```{r}
+ctrl <- trainControl(method = "repeatedcv", number = 10,savePredictions = TRUE)
+set.seed(4217)
+nb.fit <- train(purchase ~ .,  data=train, method="nb",trControl = ctrl)
+predictors(nb.fit)
+
+nb.prob <- predict(nb.fit,newdata = train,type="prob")
+nb.pr <- prediction(nb.prob$`1`, train$purchase)
+nb<-performance(nb.pr,measure= "prec", x.measure= "rec")
+performance(nb.pr,measure= "prbe")
+plot(nb, col="red")
+auc_pr(train$purchase,nb.prob$`1`)
+```
+
+
+##KNN
+```{r}
+ctrl <- trainControl(method = "repeatedcv", number = 10,savePredictions = TRUE)
+set.seed(4217)
+knn.fit <- train(purchase ~ .,  data=train, method="knn",trControl = ctrl)
+knn.prob <- predict(knn.fit,newdata = train,type="prob")
+knn.pr <- prediction(knn.prob$`1`, train$purchase)
+knn<-performance(knn.pr,measure= "prec", x.measure= "rec")
+plot(knn,  col="blue")   #add = TRUE, 
+```
+
+
+
+##model evaluation 
+```{r}
+plot(rpart_tree, col="green", add= TRUE)
+plot(nb, col= "red", dd = TRUE)
+plot(knn, col = "blue",add = TRUE)
+plot(log, col = "orange", add = TRUE)
+legend('bottomleft', c("rpart_tree","NB","KNN","log") , 
+       lty=1, col=c('green','red', 'blue',"orange"), bty='n', cex=.75)
+```
+
+Best Model: 
+```{r}
+#best.pred <- predict(######,newdata = test)
+#confusionMatrix(best.pred, test$purchase)
+```
 ```{r}
 
 ```
@@ -403,4 +491,3 @@ parallel
 ```{r}
 library(doMC)
 ```
-
