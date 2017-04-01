@@ -7,31 +7,42 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Business Case
+Companies like Groupon help companies to generate demand by offering coupons to the consumers, usually offering them at a discounted rate. Consumers /users information could be collected and analyses to recommend coupons that the users are likely to use. This analysis on coupon prediction has a wide-ranging application as: 
+1)	There is a cost to recommending a coupon  
+a.	Cost of emailing the consumers
+b.	Opportunity cost of using the space on the app for other advertisement 
+2)	There is a benefit to recommending the correct coupon 
+a.	Earning commission when the user use the coupon
+b.	Having a good reputation of getting users to buy the recommended coupons 
+In this case, we seek to use the Kaggle dataset on Pompare Coupon recommendation dataset to: 
+1)	Understand what are some variables that incentives people to purchase the coupons. 
+2)	Predict how likely is someone going to purchase given that they view. 
+Using the prediction, we can understand how likely will they buy the coupon if they view it. Together with another model to understand the probability each user view the coupons, we can recommend coupons to the users. This aims to reduce the cost of emailing the unsuitable coupons to the customers and earning greater commission as users used our recommended coupons. 
+
+
 ```{r}
 library(dplyr)
+library(lubridate)
+library(readr)
 ```
 
 ```{r}
 dir <- './data/'
+visit <- read_csv(paste0(dir,"coupon_visit_train.csv")) # big file
+
+# reduce view log size to 1 month of data
+date1 <- as.POSIXct("2012-05-24 00:00:00")
+date2 <- as.POSIXct("2012-06-24 00:00:00")
+int <- interval(date1, date2)
+visit <- visit[visit$I_DATE %within% int,]
+write_csv(visit, paste0(dir,"coupon_view_1month.csv"))
+
 area_train <- read.csv(paste0(dir,"coupon_area_train_en.csv")) #translated to en
 list_train <- read.csv(paste0(dir,"coupon_list_train_en.csv")) #translated to en
 user_list <- read.csv(paste0(dir,"user_list_en.csv"), na.strings=c("", NA))
 pref_locations <- read.csv(paste0(dir,"prefecture_locations_en.csv"))
-visit <- read.csv(paste0(dir,"coupon_view_1month.csv"))
-
 detail_train <- read.csv(paste0(dir,"coupon_detail_train_en.csv"))
-
-# not using:
-# colnames(detail_train$SMALL_AREA_NAME) change col name to residential small area
-# list_test <- read.csv(paste0(dir,"coupon_list_test.csv"))
-# visit_train <- read.csv(paste0(dir,"coupon_visit_train.csv")) # big file
-# visit_train <- visit_train[visit_train$PURCHASE_FLG!=1,c("VIEW_COUPON_ID_hash","USER_ID_hash")]
-```
-
-Rename columns to differentiate user and coupon prefecture
-```{r}
-names(user_list)[names(user_list)=="en_pref"] <- "user_pref"
-names(list_train)[names(list_train)=="en_ken"] <- "coupon_pref"
 ```
 
 ## Understanding coupon area train data
@@ -46,33 +57,19 @@ head(table(area_train$COUPON_ID_hash,area_train$PREF_NAME))
 ```
 
 ## Understanding coupon list train
-This dataset contains characteristics of each coupon.
-There are no duplicates. Each row is one coupon.
-There is location information (ken, small area name, large area name) for each coupon in this data set. But each coupon can have multiple locations as seen in area_train. How is the location determined in list_train?
+This dataset contains characteristics of each coupon. There are no duplicates. Each row is one coupon.
+There is location information (ken, small area name, large area name) for each coupon in this data set. But each coupon can have multiple locations as seen in area_train.
 ```{r}
 head(list_train)
-sum(duplicated(list_train$COUPON_ID_hash))
-
-# looking at the same coupon ID as in area_train, the location in list_train is one of the many locations in area_train.
-list_train[list_train$COUPON_ID_hash == "7d1ce87a632bc4a57cfb4fc4a895cced",]
-# ken = Hyogo Prefecture
-
+cat("There are", sum(duplicated(list_train$COUPON_ID_hash)), "duplicate coupons in list_train")
 ```
 
 ## Coupon Detail train
-This data set contains purchase log of users.
-A quick look at the data reveals that one user can purchase the same coupon of the same location at different times, each generating a row in this data set.
-What happens when a user purchases the same coupon at two locations at the same time? does this generate two rows or one row?
-
+This data set contains purchase log of users. A quick look at the data reveals that one user can purchase the same coupon of the same location at different times, each generating a row in this data set.
 ```{r}
 head(detail_train)
 head(detail_train[duplicated(detail_train$USER_ID_hash),])
-
 ```
-
-## test set is a different set of coupons from train
-
-## are the test coupons in the view log?
 
 ## Understanding User list
 Prefecture (not small area) is provided
@@ -81,7 +78,12 @@ head(user_list)
 str(user_list)
 ```
 
-## Data cleaning/wrangling
+# Data cleaning/wrangling
+Rename columns to differentiate user and coupon prefecture
+```{r}
+names(user_list)[names(user_list)=="en_pref"] <- "user_pref"
+names(list_train)[names(list_train)=="en_ken"] <- "coupon_pref"
+```
 
 There are missing prefecture data in user_list. Why are there missing residential addresses? Have these users purchased something?
 ```{r}
@@ -92,9 +94,6 @@ cat("purchases without user residential area recorded:", sum(is.na(detail_train$
 # no NAs, every coupon purchase has a user residential area recorded
 
 cat(sum(user_list[is.na(user_list$user_pref), "USER_ID_hash" ] %in% unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"])), "users without pref name in user_list but has small area residential name in detail_train\n")
-
-# sum( unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"] %in% user_list[is.na(user_list$user_pref), "USER_ID_hash" ]))
-
 ```
 
 Can we use SMALL_AREA_NAME to get prefecture name for the users without a residential prefecture recorded? SMALL_AREA_NAME is the "User redidential area name" according to Kaggle Data page, but a quick check revealed that the same user can be listed in multiple locations on the purchase log, yet have no registered address in the user list. How could that be?
@@ -108,7 +107,6 @@ Browsing some coupon pages revealed that coupons like restaurant discount ticket
 ```"Discount ticket" will be delivered to the designated address at the time of purchase by "Kuroneko DM flight"```
 
 That explains multiple small areas associated with each user. Coupons could be delivered either to the user's or friend's/family's address. With this in mind, we can fill up missing prefectures in user_list using the most common prefecture the coupons are delivered to.
-
 ```{r}
 # Get (small area name - prefecture name) association from list_train
 small.area.pref <- unique(list_train[,c("en_small_area", "coupon_pref")])
@@ -134,128 +132,7 @@ user_list$user_pref <- ifelse(is.na(user_list$user_pref), user_list$mode.pref, u
 user_list$mode.pref <- NULL
 ```
 
-# Preparing data for modeling
-Rows from view log contain multiple of the same coupon-user pair, because each user can view multiple times then eventually purchase during another session, each recorded as one row.
-Summarizing into unique coupon-user pairs, in that users who eventually bought will be classified as purchased.
-```{r}
-visit.info<- visit %>%
-  group_by(VIEW_COUPON_ID_hash,USER_ID_hash)%>%
-  summarise(purchase = max(PURCHASE_FLG), view_count = n())
-```
-
-merge visit.info, user characteristics, coupon characteristics
-Drop irrelevant columns to reduce dataframe size
-```{r}
-dat <-merge(list_train,visit.info, by.x = "COUPON_ID_hash",by.y = "VIEW_COUPON_ID_hash")
-dat <-merge(dat, user_list, by="USER_ID_hash")
-
-drops <- c("large_area_name","ken_name","small_area_name","GENRE_NAME", "DISPFROM","DISPEND","VALIDFROM","VALIDEND","PREF_NAME","REG_DATE" ,"WITHDRAW_DATE", "CAPSULE_TEXT", "en_large_area", "en_small_area")
-dat <- dat[, !(names(dat) %in% drops)]
-
-```
-
-```{r}
-write.csv(dat, paste0(dir,"visit_user_coupon.csv"), row.names = F)
-```
-
-# Feature Engineering
-```{r}
-dat <- read.csv(paste0(dir,"visit_user_coupon.csv"))
-```
-
-distance between user and coupon default prefecture
-```{r}
-
-prefs <- pref_locations[,c("LATITUDE", "LONGITUDE", "en_PREF_NAME")]
-
-names(prefs) <- c("coupon_LATITUDE", "coupon_LONGITUDE", "en_PREF_NAME")
-dat <- merge(dat, prefs, by.x = "coupon_pref", by.y = "en_PREF_NAME", all.x = TRUE)
-
-names(prefs) <- c("user_LATITUDE", "user_LONGITUDE", "en_PREF_NAME")
-dat <- merge(dat, prefs, by.x = "user_pref", by.y = "en_PREF_NAME", all.x = TRUE)
-
-dat$user.coupon.dist <- sqrt(I(dat$coupon_LATITUDE - dat$user_LATITUDE)^2 + I(dat$coupon_LONGITUDE - dat$user_LONGITUDE)^2)
-
-drops_latlon <- c("coupon_LATITUDE","user_LATITUDE","coupon_LONGITUDE","user_LONGITUDE", "coupon_pref")
-dat <- dat[, !(names(dat) %in% drops_latlon)]
-
-```
-
-most frequently visited genre
-```{r}
-mode.genre <- dat %>% 
-  group_by(USER_ID_hash) %>%
-  summarize(mode.visit.genre = getmode(en_genre))
-
-dat <- merge(dat, mode.genre,by = "USER_ID_hash",all.x = TRUE)
-
-##Genre Match
-dat$en_genre<-as.character(dat$en_genre)
-dat$mode.visit.genre<-as.character(dat$mode.visit.genre)
-dat$same.genre <- dat$en_genre==dat$mode.visit.genre
-
-dat$en_capsule <- NULL
-dat$mode.visit.genre <- NULL
-dat$en_genre<-factor(dat$en_genre)
-```
-
-distance between user and coupon nearest branch prefecture
-```{r}
-#WIP
-coupon_branches <- unique(area_train[,c("COUPON_ID_hash", "en_pref")])
-```
-
-most frequent gender viewing coupons
-```{r}
-mode.gender <- dat %>% 
-  group_by(COUPON_ID_hash) %>%
-  summarize(mode.visit.gender = getmode(SEX_ID))
-
-dat <- merge(dat, mode.gender,by = "COUPON_ID_hash",all.x = TRUE)
-
-## If Match
-dat$same.gender <- dat$SEX_ID == dat$mode.visit.gender
-
-dat$mode.visit.gender<-NULL
-```
-
-most frequent age group viewing coupons
-```{r}
-dat$age_group<-cut(dat$AGE, 
-                          breaks = c(15, 22, 30, 40, 50, 60, 85), 
-                          labels = c("15 to 21", "22 to 29", "30 to 39", "40 to 49", "50 to 59", "60 to 85"), 
-                          right = FALSE)
-mode.agegroup <- dat %>% 
-  group_by(COUPON_ID_hash) %>%
-  summarize(mode.visit.agegroup = getmode(age_group))
-dat <- merge(dat, mode.agegroup, by = "COUPON_ID_hash",all.x = TRUE)
-
-## If Match
-dat$same.age.group <- dat$age_group == dat$mode.visit.agegroup
-
-dat$mode.visit.agegroup<-NULL
-```
-
-Get weekend, weekday flags. NA is converted to 1 because if not given, it is usable every day.
-```{r}
-dat$USABLE_DATE_Weekday<-ifelse(dat$USABLE_DATE_FRI!=0|dat$USABLE_DATE_THU!=0|dat$USABLE_DATE_WED!=0|dat$USABLE_DATE_TUE!=0|dat$USABLE_DATE_MON!=0,1,0)
-dat$USABLE_DATE_Weekday[is.na(dat$USABLE_DATE_Weekday)] <- 1
-dat$USABLE_DATE_Weekend<-ifelse(dat$USABLE_DATE_SAT!=0|dat$USABLE_DATE_SUN!=0,1,0)
-dat$USABLE_DATE_Weekend[is.na(dat$USABLE_DATE_Weekend)] <- 1
-dat$USABLE_DATE_HOLIDAY<-ifelse(dat$USABLE_DATE_HOLIDAY!=0,1,0)
-dat$USABLE_DATE_HOLIDAY[is.na(dat$USABLE_DATE_HOLIDAY)] <- 1
-dat$USABLE_DATE_BEFORE_HOLIDAY<-ifelse(dat$USABLE_DATE_BEFORE_HOLIDAY!=0,1,0)
-dat$USABLE_DATE_BEFORE_HOLIDAY[is.na(dat$USABLE_DATE_BEFORE_HOLIDAY)] <- 1
-
-drops_dayofweek <- c("USABLE_DATE_MON","USABLE_DATE_TUE","USABLE_DATE_WED","USABLE_DATE_THU", "USABLE_DATE_FRI","USABLE_DATE_SAT","USABLE_DATE_SUN")
-dat <- dat[, !(names(dat) %in% drops_dayofweek)]
-
-dat$USABLE_DATE_HOLIDAY<-as.factor(dat$USABLE_DATE_HOLIDAY)
-dat$USABLE_DATE_BEFORE_HOLIDAY<-as.factor(dat$USABLE_DATE_BEFORE_HOLIDAY)
-dat$USABLE_DATE_Weekday<-as.factor(dat$USABLE_DATE_Weekday)
-dat$USABLE_DATE_Weekend<-as.factor(dat$USABLE_DATE_Weekend)
-```
-
+Group discount rate into "high" and "low"
 ```{r}
 dat$discgroup <- ifelse(dat$PRICE_RATE <= 55, "LOW", "HIGH")
 dat$discgroup <- as.factor(dat$discgroup)
@@ -278,42 +155,158 @@ dat$user_pref[is.na(dat$user_pref)] <- "Unknown"
 dat$user_pref <- as.factor(dat$user_pref)
 ```
 
-drop user and coupon IDs & set as factor
+# Preparing data for modeling
+Rows from view log contain multiple of the same coupon-user pair, because each user can view multiple times then eventually purchase during another session, each recorded as one row. We summarize the log into unique coupon-user pairs, in that users who eventually bought will be classified as purchased.
 ```{r}
-dat <-subset(dat,select = -c(USER_ID_hash, COUPON_ID_hash))
+visit.info<- visit %>%
+  group_by(VIEW_COUPON_ID_hash,USER_ID_hash)%>%
+  summarise(purchase = max(PURCHASE_FLG), view_count = n())
 ```
 
-# insert code for more cleaning
-
+Merge visit.info, user characteristics, coupon characteristics. Drop unimportant columns to reduce dataframe size.
 ```{r}
-write.csv(dat, paste0(dir,"visit_user_coupon_features.csv"), row.names = F)
+dat <-merge(list_train,visit.info, by.x = "COUPON_ID_hash",by.y = "VIEW_COUPON_ID_hash")
+dat <-merge(dat, user_list, by="USER_ID_hash")
+
+drops <- c("large_area_name","ken_name","small_area_name","GENRE_NAME", "DISPFROM","DISPEND","VALIDFROM","VALIDEND","PREF_NAME","REG_DATE" ,"WITHDRAW_DATE", "CAPSULE_TEXT", "en_large_area", "en_small_area")
+dat <- dat[, !(names(dat) %in% drops)]
 ```
 
-If reading new file:
 ```{r}
-dat <- read.csv(paste0(dir,"visit_user_coupon_features.csv"))
+write.csv(dat, paste0(dir,"visit_user_coupon.csv"), row.names = F)
+```
+
+# Feature Engineering
+```{r}
+# If starting from this section
+# dat <- read.csv(paste0(dir,"visit_user_coupon.csv"))
+```
+
+## Distance between user and coupon default prefecture
+```{r}
+prefs <- pref_locations[,c("LATITUDE", "LONGITUDE", "en_PREF_NAME")]
+
+names(prefs) <- c("coupon_LATITUDE", "coupon_LONGITUDE", "en_PREF_NAME")
+dat <- merge(dat, prefs, by.x = "coupon_pref", by.y = "en_PREF_NAME", all.x = TRUE)
+
+names(prefs) <- c("user_LATITUDE", "user_LONGITUDE", "en_PREF_NAME")
+dat <- merge(dat, prefs, by.x = "user_pref", by.y = "en_PREF_NAME", all.x = TRUE)
+
+dat$user.coupon.dist <- sqrt(I(dat$coupon_LATITUDE - dat$user_LATITUDE)^2 + I(dat$coupon_LONGITUDE - dat$user_LONGITUDE)^2)
+
+drops_latlon <- c("coupon_LATITUDE","user_LATITUDE","coupon_LONGITUDE","user_LONGITUDE", "coupon_pref")
+dat <- dat[, !(names(dat) %in% drops_latlon)]
+```
+
+## most frequently visited genre
+```{r}
+mode.genre <- dat %>% 
+  group_by(USER_ID_hash) %>%
+  summarize(mode.visit.genre = getmode(en_genre))
+
+dat <- merge(dat, mode.genre,by = "USER_ID_hash",all.x = TRUE)
+
+##Genre Match
+dat$en_genre<-as.character(dat$en_genre)
+dat$mode.visit.genre<-as.character(dat$mode.visit.genre)
+dat$same.genre <- dat$en_genre==dat$mode.visit.genre
+
+dat$en_capsule <- NULL
+dat$mode.visit.genre <- NULL
+dat$en_genre<-factor(dat$en_genre)
+```
+
+## Distance between user and coupon nearest branch prefecture
+```{r}
+#WIP
+coupon_branches <- unique(area_train[,c("COUPON_ID_hash", "en_pref")])
+```
+
+## Most common gender viewing coupons
+```{r}
+mode.gender <- dat %>% 
+  group_by(COUPON_ID_hash) %>%
+  summarize(mode.visit.gender = getmode(SEX_ID))
+
+dat <- merge(dat, mode.gender,by = "COUPON_ID_hash",all.x = TRUE)
+
+## If Match
+dat$same.gender <- dat$SEX_ID == dat$mode.visit.gender
+
+dat$mode.visit.gender<-NULL
+```
+
+## Most frequent age group viewing coupons
+```{r}
+dat$age_group<-cut(dat$AGE, 
+                          breaks = c(15, 22, 30, 40, 50, 60, 85), 
+                          labels = c("15 to 21", "22 to 29", "30 to 39", "40 to 49", "50 to 59", "60 to 85"), 
+                          right = FALSE)
+mode.agegroup <- dat %>% 
+  group_by(COUPON_ID_hash) %>%
+  summarize(mode.visit.agegroup = getmode(age_group))
+dat <- merge(dat, mode.agegroup, by = "COUPON_ID_hash",all.x = TRUE)
+
+## If Match
+dat$same.age.group <- dat$age_group == dat$mode.visit.agegroup
+
+dat$mode.visit.agegroup<-NULL
+```
+
+## Weekend, weekday flags
+NA is converted to 1 because if this information is not given, it is usable every day.
+```{r}
+dat$USABLE_DATE_Weekday<-ifelse(dat$USABLE_DATE_FRI!=0|dat$USABLE_DATE_THU!=0|dat$USABLE_DATE_WED!=0|dat$USABLE_DATE_TUE!=0|dat$USABLE_DATE_MON!=0,1,0)
+dat$USABLE_DATE_Weekday[is.na(dat$USABLE_DATE_Weekday)] <- 1
+dat$USABLE_DATE_Weekend<-ifelse(dat$USABLE_DATE_SAT!=0|dat$USABLE_DATE_SUN!=0,1,0)
+dat$USABLE_DATE_Weekend[is.na(dat$USABLE_DATE_Weekend)] <- 1
+dat$USABLE_DATE_HOLIDAY<-ifelse(dat$USABLE_DATE_HOLIDAY!=0,1,0)
+dat$USABLE_DATE_HOLIDAY[is.na(dat$USABLE_DATE_HOLIDAY)] <- 1
+dat$USABLE_DATE_BEFORE_HOLIDAY<-ifelse(dat$USABLE_DATE_BEFORE_HOLIDAY!=0,1,0)
+dat$USABLE_DATE_BEFORE_HOLIDAY[is.na(dat$USABLE_DATE_BEFORE_HOLIDAY)] <- 1
+
+drops_dayofweek <- c("USABLE_DATE_MON","USABLE_DATE_TUE","USABLE_DATE_WED","USABLE_DATE_THU", "USABLE_DATE_FRI","USABLE_DATE_SAT","USABLE_DATE_SUN")
+dat <- dat[, !(names(dat) %in% drops_dayofweek)]
+
 dat$USABLE_DATE_HOLIDAY<-as.factor(dat$USABLE_DATE_HOLIDAY)
 dat$USABLE_DATE_BEFORE_HOLIDAY<-as.factor(dat$USABLE_DATE_BEFORE_HOLIDAY)
 dat$USABLE_DATE_Weekday<-as.factor(dat$USABLE_DATE_Weekday)
 dat$USABLE_DATE_Weekend<-as.factor(dat$USABLE_DATE_Weekend)
 ```
 
-## Split into test and train dataset
+drop user and coupon IDs & set as factor
 ```{r}
-dat$purchase<-as.factor(dat$purchase)
-
-# feature.names <- names(dat)
-# for (f in feature.names) {
-#   if (class(dat[[f]])=="factor") {
-#     levels <- unique(c(dat[[f]]))
-#     dat[[f]] <- factor(dat[[f]],
-#                    labels=make.names(levels))
-#   }
-# }
+dat <-subset(dat,select = -c(USER_ID_hash, COUPON_ID_hash))
 ```
 
 ```{r}
-# dat<-dat[ sample( -which( dat$purchase == 0 ) , 370000 ) , ]
+write.csv(dat, paste0(dir,"visit_user_coupon_features.csv"), row.names = F)
+```
+
+# Modelling 
+Our approach to modelling is: 
+1)	Spilt data into 70% train, 30% test 
+2)	Apply 10-fold cross validation on the training data 
+3)	Apply various models on the cross validated training data 
+4)	Evaluate different models using the performance measure 
+  a.	Performance measure chosen: Area under Precision Recall curve 
+  b.	Reason: Precision recall aims to measure how efficient and precise the model, and measure whether we are recommending the suitable coupons to the customers and out of all the suitable coupons for the customers, how many are we recommending 
+5)	Select the best model and apply it to the dataset
+6)	Report the generalized performance of the model when new data is added (30% test) 
+
+
+If starting from this section:
+```{r}
+# dat <- read.csv(paste0(dir,"visit_user_coupon_features.csv"))
+# dat$USABLE_DATE_HOLIDAY<-as.factor(dat$USABLE_DATE_HOLIDAY)
+# dat$USABLE_DATE_BEFORE_HOLIDAY<-as.factor(dat$USABLE_DATE_BEFORE_HOLIDAY)
+# dat$USABLE_DATE_Weekday<-as.factor(dat$USABLE_DATE_Weekday)
+# dat$USABLE_DATE_Weekend<-as.factor(dat$USABLE_DATE_Weekend)
+```
+
+## Split into test and train dataset
+```{r}
+dat$purchase<-as.factor(dat$purchase)
 ```
 
 ```{r}
@@ -347,12 +340,6 @@ auc_pr<- function(obs, pred) {
 }
 ```
 
-## Logistic Regression
-```{r}
-ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE, classProbs = TRUE)
-log_fit <- train(match ~ .,  data=trainData, method="LogitBoost", family="binomial",trControl = ctrl)
-predictors(log_fit)
-```
 
 ## Decision Tree
 ```{r}
@@ -364,7 +351,6 @@ library(rattle)
 fancyRpartPlot(dtree$finalModel)
 
 rpartProbs <- predict(dtree, train, type = "prob")
-summary(rpartProbs)
 
 auc_pr(train$purchase, rpartProbs$`1`)
 
@@ -376,8 +362,8 @@ plot(X)
 ```
 
 ```{r}
-rpartPred <- predict(dtree, train)
-confusionMatrix(rpartPred, train$purchase)
+# rpartPred <- predict(dtree, train)
+# confusionMatrix(rpartPred, train$purchase)
 ```
 
 Try with rpart package
@@ -390,7 +376,65 @@ library(rpart.plot)
 prp(dtree.rpart, type=2, extra=104, fallen.leaves = TRUE, main="Decision Tree")
 ```
 
+## Logistic Regression
+```{r}
+ctrl <- trainControl(method = "repeatedcv", number = 10,savePredictions = TRUE)
+set.seed(4217)
+log_fit <- train(purchase ~ .,  data=train, method="glmnet",trControl = ctrl)
+predictors(log_fit)
+plot(varImp(log_fit))
+log_pred <- predict(log_fit,newdata = train,type="prob")
 
+pr <- prediction(log_pred$`1`, train$purchase)
+log<-performance(pr,measure= "prec", x.measure= "rec")
+plot(log, col= "orange")
+```
+
+
+## Naive Bayes
+```{r}
+ctrl <- trainControl(method = "repeatedcv", number = 10,savePredictions = TRUE)
+set.seed(4217)
+nb.fit <- train(purchase ~ .,  data=train, method="nb",trControl = ctrl)
+predictors(nb.fit)
+
+nb.prob <- predict(nb.fit,newdata = train,type="prob")
+nb.pr <- prediction(nb.prob$`1`, train$purchase)
+nb<-performance(nb.pr,measure= "prec", x.measure= "rec")
+performance(nb.pr,measure= "prbe")
+plot(nb, col="red")
+auc_pr(train$purchase,nb.prob$`1`)
+```
+
+
+## KNN
+```{r}
+ctrl <- trainControl(method = "repeatedcv", number = 10,savePredictions = TRUE)
+set.seed(4217)
+knn.fit <- train(purchase ~ .,  data=train, method="knn",trControl = ctrl)
+knn.prob <- predict(knn.fit,newdata = train,type="prob")
+knn.pr <- prediction(knn.prob$`1`, train$purchase)
+knn<-performance(knn.pr,measure= "prec", x.measure= "rec")
+plot(knn,  col="blue")   #add = TRUE, 
+```
+
+
+
+# Model evaluation 
+```{r}
+plot(rpart_tree, col="green", add= TRUE)
+plot(nb, col= "red", dd = TRUE)
+plot(knn, col = "blue",add = TRUE)
+plot(log, col = "orange", add = TRUE)
+legend('bottomleft', c("rpart_tree","NB","KNN","log") , 
+       lty=1, col=c('green','red', 'blue',"orange"), bty='n', cex=.75)
+```
+
+Best Model: 
+```{r}
+#best.pred <- predict(######,newdata = test)
+#confusionMatrix(best.pred, test$purchase)
+```
 
 ```{r}
 
@@ -404,4 +448,3 @@ parallel
 ```{r}
 library(doMC)
 ```
-
