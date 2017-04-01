@@ -195,6 +195,7 @@ dat$same.genre <- dat$en_genre==dat$mode.visit.genre
 
 dat$en_capsule <- NULL
 dat$mode.visit.genre <- NULL
+dat$en_genre<-factor(dat$en_genre)
 ```
 
 distance between user and coupon nearest branch prefecture
@@ -287,38 +288,31 @@ dat <-subset(dat,select = -c(USER_ID_hash, COUPON_ID_hash))
 write.csv(dat, paste0(dir,"visit_user_coupon_features.csv"), row.names = F)
 ```
 
-## Split into test and train dataset
-
+If reading new file:
 ```{r}
 dat <- read.csv(paste0(dir,"visit_user_coupon_features.csv"))
-```
-
-```{r}
-dat$purchase<-as.factor(dat$purchase)
-
 dat$USABLE_DATE_HOLIDAY<-as.factor(dat$USABLE_DATE_HOLIDAY)
 dat$USABLE_DATE_BEFORE_HOLIDAY<-as.factor(dat$USABLE_DATE_BEFORE_HOLIDAY)
 dat$USABLE_DATE_Weekday<-as.factor(dat$USABLE_DATE_Weekday)
 dat$USABLE_DATE_Weekend<-as.factor(dat$USABLE_DATE_Weekend)
+```
+
+## Split into test and train dataset
+```{r}
 dat$purchase<-as.factor(dat$purchase)
 
-feature.names <- names(dat)
-
-for (f in feature.names) {
-  if (class(dat[[f]])=="factor") {
-    levels <- unique(c(dat[[f]]))
-    dat[[f]] <- factor(dat[[f]],
-                   labels=make.names(levels))
-  }
-}
+# feature.names <- names(dat)
+# for (f in feature.names) {
+#   if (class(dat[[f]])=="factor") {
+#     levels <- unique(c(dat[[f]]))
+#     dat[[f]] <- factor(dat[[f]],
+#                    labels=make.names(levels))
+#   }
+# }
 ```
 
 ```{r}
-dat$X <- NULL
-```
-
-```{r}
-dat<-dat[ sample( -which( dat$purchase == 0 ) , 370000 ) , ]
+# dat<-dat[ sample( -which( dat$purchase == 0 ) , 370000 ) , ]
 ```
 
 ```{r}
@@ -334,6 +328,22 @@ write.csv(test, paste0(dir,"visit_test.csv"), row.names = F)
 
 ```{r}
 library(caret)
+library(caTools)
+auc_pr<- function(obs, pred) {
+  xx.df <- prediction(pred, obs)
+  perf  <- performance(xx.df, "prec", "rec")
+  xy    <- data.frame(recall=perf@x.values[[1]], precision=perf@y.values[[1]])
+  
+  # take out division by 0 for lowest threshold
+  xy <- subset(xy, !is.nan(xy$precision))
+  
+  # Designate recall = 0 as precision = x...arbitrary
+  xy <- rbind(c(0, 0), xy)
+  #xy <- xy[!(rowSums(xy)==0), ]
+  
+  res   <- trapz(xy$recall, xy$precision)
+  res
+}
 ```
 
 ## Logistic Regression
@@ -345,54 +355,52 @@ predictors(log_fit)
 
 ## Decision Tree
 ```{r}
-
-ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE, classProbs = TRUE)
+ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
 set.seed(4217)
-rpartTune <- train(purchase ~ ., data = train, method = "rpart", trControl = ctrl, parms=list(split='information'))
-rpartTune$finalModel
-
-plot(rpartTune$finalModel)
-
-rpartPred <- predict(rpartTune, train)
-summary(rpartPred)
-rpartPred
-rpartProbs <- predict(rpartTune, train, type = "prob")
-summary(rpartProbs)
-
+dtree <- train(purchase ~ ., data = train, method = "rpart", trControl = ctrl, parms=list(split='information'))
 
 library(rattle)
-fancyRpartPlot(rpartTune$finalModel)
+fancyRpartPlot(dtree$finalModel)
+
+rpartProbs <- predict(dtree, train, type = "prob")
+summary(rpartProbs)
+
+auc_pr(train$purchase, rpartProbs$`1`)
 
 library(ROCR)
-pr <- prediction(rpartProbs[,2], train$purchase)
+pr <- prediction(rpartProbs$`1`, train$purchase)
 X<-performance(pr,measure= "prec", x.measure= "rec")
 performance(pr,measure= "prbe")
 plot(X)
-
-
-
-# confusionMatrix(rpartProbs$X2, train$purchase)
 ```
 
+```{r}
+rpartPred <- predict(dtree, train)
+confusionMatrix(rpartPred, train$purchase)
+```
+
+Try with rpart package
+```{r}
+library(rpart)
+
+dtree.rpart <- rpart(purchase ~ ., data=train, method="class", parms=list(split="information"))
+
+library(rpart.plot)
+prp(dtree.rpart, type=2, extra=104, fallen.leaves = TRUE, main="Decision Tree")
+```
+
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+parallel
 ```{r}
 library(doMC)
-
-```
-
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
 ```
 
