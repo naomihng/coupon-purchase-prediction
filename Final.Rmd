@@ -26,8 +26,8 @@ library(dplyr)
 library(lubridate)
 library(readr)
 ```
-#Translation
 
+# Translation
 Changing of Japanese names to english names 
 FORK and adapted from andreas https://www.kaggle.com/anguyen/coupon-purchase-prediction/translate-everything-to-english-using-r 
 ```{r}
@@ -49,9 +49,8 @@ names(trans)=c("jp","en_capsule") # Rename column
 coupon_list_train=merge(coupon_list_train,trans,by.x="CAPSULE_TEXT",by.y="jp",all.x=T) # Join translation onto original data
 names(trans)=c("jp","en_genre"); coupon_list_train=merge(coupon_list_train,trans,by.x="GENRE_NAME",by.y="jp",all.x=T)
 names(trans)=c("jp","en_small_area"); coupon_list_train=merge(coupon_list_train,trans,by.x="small_area_name",by.y="jp",all.x=T)
-names(trans)=c("jp","en_ken"); coupon_list_train=merge(coupon_list_train,trans,by.x="ken_name",by.y="jp",all.x=T)
+names(trans)=c("jp","coupon_pref"); coupon_list_train=merge(coupon_list_train,trans,by.x="ken_name",by.y="jp",all.x=T)
 names(trans)=c("jp","en_large_area"); coupon_list_train=merge(coupon_list_train,trans,by.x="large_area_name",by.y="jp",all.x=T)
-names(coupon_list_train)[names(coupon_list_train)=="en_ken"] <- "coupon_pref"
 write.csv(coupon_list_train, paste0(dir,"coupon_list_train_en.csv"), row.names = F)
 
 # COUPON_AREA_TRAIN.CSV
@@ -62,8 +61,7 @@ write.csv(coupon_area_train, paste0(dir,"coupon_area_train_en.csv"), row.names =
 
 # USER_LIST
 user_list = read.csv(paste0(dir,"user_list.csv"), as.is=T) 
-names(trans)=c("jp","en_pref"); user_list=merge(user_list,trans,by.x="PREF_NAME",by.y="jp",all.x=T)
-names(user_list)[names(user_list)=="en_pref"] <- "user_pref"
+names(trans)=c("jp","user_pref"); user_list=merge(user_list,trans,by.x="PREF_NAME",by.y="jp",all.x=T)
 write.csv(user_list, paste0(dir,"user_list_en.csv"), row.names = F)
 
 # Detail train 
@@ -85,8 +83,8 @@ write.csv(prefecture_locations, paste0(dir,"prefecture_locations_en.csv"), row.n
 ```{r}
 dir <- './data/'
 visit <- read_csv(paste0(dir,"coupon_visit_train.csv"))
-#test data for view log
 
+# reduce view log size to 1 month of data
 date1 <- as.POSIXct("2012-05-24 00:00:00")
 date2 <- as.POSIXct("2012-06-24 00:00:00")
 int <- interval(date1, date2)
@@ -97,7 +95,6 @@ area_train <- read.csv(paste0(dir,"coupon_area_train_en.csv")) #translated to en
 list_train <- read.csv(paste0(dir,"coupon_list_train_en.csv")) #translated to en
 user_list <- read.csv(paste0(dir,"user_list_en.csv"), na.strings=c("", NA))
 pref_locations <- read.csv(paste0(dir,"prefecture_locations_en.csv"))
-
 detail_train <- read.csv(paste0(dir,"coupon_detail_train_en.csv"))
 ```
 
@@ -113,29 +110,19 @@ head(table(area_train$COUPON_ID_hash,area_train$PREF_NAME))
 ```
 
 ## Understanding coupon list train
-This dataset contains characteristics of each coupon.
-There are no duplicates. Each row is one coupon.
-There is location information (ken, small area name, large area name) for each coupon in this data set.
+This dataset contains characteristics of each coupon. There are no duplicates. Each row is one coupon.
+There is location information (ken, small area name, large area name) for each coupon in this data set. But each coupon can have multiple locations as seen in area_train.
 ```{r}
 head(list_train)
-sum(duplicated(list_train$COUPON_ID_hash))
-
-# looking at the same coupon ID as in area_train, the location in list_train is one of the many locations in area_train.
-list_train[list_train$COUPON_ID_hash == "7d1ce87a632bc4a57cfb4fc4a895cced",]
-# ken = Hyogo Prefecture
+cat("There are", sum(duplicated(list_train$COUPON_ID_hash)), "duplicate coupons in list_train")
 ```
 
 ## Coupon Detail train
-This data set contains purchase log of users.
-A quick look at the data reveals that one user can purchase the same coupon of the same location at different times, each generating a row in this data set.
-
-
+This data set contains purchase log of users. A quick look at the data reveals that one user can purchase the same coupon of the same location at different times, each generating a row in this data set.
 ```{r}
 head(detail_train)
 head(detail_train[duplicated(detail_train$USER_ID_hash),])
 ```
-
-
 
 ## Understanding User list
 Prefecture (not small area) is provided
@@ -144,7 +131,8 @@ head(user_list)
 str(user_list)
 ```
 
-## Data cleaning/wrangling
+# Data cleaning
+There are missing prefecture data in user_list. Why are there missing residential addresses? Have these users purchased something?
 ```{r}
 cat(sum(is.na(user_list$user_pref)), "users with missing pref location\n")
 # Checking if all purchased coupons have a user residential area name
@@ -153,11 +141,9 @@ cat("purchases without user residential area recorded:", sum(is.na(detail_train$
 # no NAs, every coupon purchase has a user residential area recorded
 
 cat(sum(user_list[is.na(user_list$user_pref), "USER_ID_hash" ] %in% unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"])), "users without pref name in user_list but has small area residential name in detail_train\n")
-
-# sum( unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"] %in% user_list[is.na(user_list$user_pref), "USER_ID_hash" ]))
-
 ```
 
+Can we use SMALL_AREA_NAME to get prefecture name for the users without a residential prefecture recorded? SMALL_AREA_NAME is the "User redidential area name" according to Kaggle Data page, but a quick check revealed that the same user can be listed in multiple locations on the purchase log, yet have no registered address in the user list. How could that be?
 
 ```{r}
 head(detail_train[,c("USER_ID_hash", "SMALL_AREA_NAME")], n=10)
@@ -168,13 +154,12 @@ Browsing some coupon pages revealed that coupons like restaurant discount ticket
 ```"Discount ticket" will be delivered to the designated address at the time of purchase by "Kuroneko DM flight"```
 
 That explains multiple small areas associated with each user. Coupons could be delivered either to the user's or friend's/family's address. With this in mind, we can fill up missing prefectures in user_list using the most common prefecture the coupons are delivered to.
-
 ```{r}
 # Get (small area name - prefecture name) association from list_train
 small.area.pref <- unique(list_train[,c("en_small_area", "coupon_pref")])
 
 # Merge with detail train to get prefecture for small area
-detail_train <- merge(detail_train, small.area.pref, by= "en_small_area", all.x = TRUE)
+detail_train <- merge(detail_train, small.area.pref, by.x = "en_SMALL_AREA_NAME", by.y = "en_small_area", all.x = TRUE)
 
 # Get most frequent prefecture for each user from purchase log
 getmode <- function(v) {
@@ -202,7 +187,7 @@ visit.info<- visit %>%
   summarise(purchase = max(PURCHASE_FLG), view_count = n())
 ```
 
-merge visit.info, user characteristics, coupon characteristics.Drop irrelevant columns to reduce dataframe size
+Merge visit.info, user characteristics, coupon characteristics. Drop irrelevant columns to reduce dataframe size
 ```{r}
 dat <-merge(list_train,visit.info, by.x = "COUPON_ID_hash",by.y = "VIEW_COUPON_ID_hash")
 dat <-merge(dat, user_list, by="USER_ID_hash")
@@ -215,16 +200,14 @@ dat <- dat[, !(names(dat) %in% drops)]
 write.csv(dat, paste0(dir,"visit_user_coupon.csv"), row.names = F)
 ```
 
-
-##############################################################################################
 # Feature Engineering
 ```{r}
-#dat <- read.csv(paste0(dir,"visit_user_coupon.csv"))
+# If starting from this section
+# dat <- read.csv(paste0(dir,"visit_user_coupon.csv"))
 ```
 
 ## Distance between user and coupon default prefecture
 ```{r}
-
 prefs <- pref_locations[,c("LATITUDE", "LONGITUDE", "en_PREF_NAME")]
 
 names(prefs) <- c("coupon_LATITUDE", "coupon_LONGITUDE", "en_PREF_NAME")
@@ -429,8 +412,6 @@ dat$areas<- NULL
 dat$purchase_oop<- NULL
 ```
 
-################################################################################################
-
 # Creating the dataframe
 
 ## Interaction variables
@@ -443,6 +424,7 @@ dat$same.genre <- dat$en_genre==dat$mode.visit.genre
 dat$en_capsule <- NULL
 dat$mode.visit.genre <- NULL
 dat$en_genre<-factor(dat$en_genre)
+
 ## If gender Match
 dat$same.gender <- dat$SEX_ID == dat$mode.visit.gender
 dat$mode.visit.gender<-NULL
@@ -452,7 +434,7 @@ dat$same.age.group <- dat$age_group == dat$mode.visit.agegroup
 dat$mode.visit.agegroup<-NULL
 ```
 
-##Remove NAs
+## Remove NAs
 ```{r}
 dat<-dat %>% 
   group_by(en_genre) %>% 
@@ -478,7 +460,7 @@ dat <-subset(dat,select = -c(USER_ID_hash, COUPON_ID_hash))
 write.csv(dat, paste0(dir,"visit_user_coupon_features.csv"), row.names = F)
 ```
 
-#Modelling 
+# Modelling 
 Our approach to modelling is:        
 1)	Spilt data into 70% train, 30% test       
 2)	Apply 10-fold cross validation on the training data       
@@ -539,8 +521,8 @@ auc_pr<- function(obs, pred) {
 ```
 
 
-## Classification Tree
-Classification tree was used as it provide a easy method to understand purchasing decision since the tree is simple to understand. 
+## Decision Tree
+We used a decision tree because it provides a easy method to understand purchasing decision.
 ```{r}
 ctrl <- trainControl(method = "repeatedcv", number = 10, savePredictions = TRUE)
 set.seed(4217)
@@ -560,22 +542,8 @@ performance(pr,measure= "prbe")
 plot(tree, col= "blue")
 ```
 
-```{r}
-rpartPred <- predict(dtree, train)
-confusionMatrix(rpartPred, train$purchase)
-```
 
-Try with rpart package
-```{r}
-#library(rpart)
-
-#dtree.rpart <- rpart(purchase ~ ., data=train, method="class", parms=list(split="information"))
-
-#library(rpart.plot)
-#prp(dtree.rpart, type=2, extra=104, fallen.leaves = TRUE, main="Decision Tree")
-```
-
-##Logistic Regression
+## Logistic Regression
 Lasso Regression is used based on the objective to minimize variance and perform regularisation. 
 In caret package, glmnet performed feature selections for logistic regression
 ```{r}
@@ -608,7 +576,7 @@ plot(nb, col="red")
 ```
 
 
-##KNN
+## KNN
 KNN was not used in the end due to high number of observations which require the calculation of large numbers of distance for prediction. However, this could be one of a feasible models for prediction as the observations that are similar have similar purchasing decisions.  
 
 ```{r}
@@ -622,8 +590,7 @@ KNN was not used in the end due to high number of observations which require the
 ```
 
 
-
-##model evaluation 
+# Model evaluation 
 ```{r}
 plot(log,col="blue")
 plot(tree, col="green", add= TRUE)
