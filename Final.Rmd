@@ -79,7 +79,7 @@ write.csv(prefecture_locations, paste0(dir,"prefecture_locations_en.csv"), row.n
 
 ```
 
-# Retrieving Data and subsetting data 
+# Loading dataframe and Background
 ```{r}
 dir <- './data/'
 visit <- read_csv(paste0(dir,"coupon_visit_train.csv"))
@@ -98,7 +98,7 @@ pref_locations <- read.csv(paste0(dir,"prefecture_locations_en.csv"))
 detail_train <- read.csv(paste0(dir,"coupon_detail_train_en.csv"))
 ```
 
-## Understanding coupon area train data
+## Understanding Coupon area_train
 each COUPON_ID_hash can have multiple rows. selecting one example of COUPON_ID_hash reveals that each coupon can be listed for multiple locations.
 ```{r}
 sum(duplicated(area_train$COUPON_ID_hash))
@@ -109,7 +109,7 @@ area_train[area_train$COUPON_ID_hash == "7d1ce87a632bc4a57cfb4fc4a895cced",]
 head(table(area_train$COUPON_ID_hash,area_train$PREF_NAME))
 ```
 
-## Understanding coupon list train
+## Understanding Coupon list_train
 This dataset contains characteristics of each coupon. There are no duplicates. Each row is one coupon.
 There is location information (ken, small area name, large area name) for each coupon in this data set. But each coupon can have multiple locations as seen in area_train.
 ```{r}
@@ -117,14 +117,14 @@ head(list_train)
 cat("There are", sum(duplicated(list_train$COUPON_ID_hash)), "duplicate coupons in list_train")
 ```
 
-## Coupon Detail train
+## Understanding Coupon Detail_train
 This data set contains purchase log of users. A quick look at the data reveals that one user can purchase the same coupon of the same location at different times, each generating a row in this data set.
 ```{r}
 head(detail_train)
 head(detail_train[duplicated(detail_train$USER_ID_hash),])
 ```
 
-## Understanding User list
+## Understanding User_list
 Prefecture (not small area) is provided
 ```{r}
 head(user_list)
@@ -138,7 +138,6 @@ cat(sum(is.na(user_list$user_pref)), "users with missing pref location\n")
 # Checking if all purchased coupons have a user residential area name
 
 cat("purchases without user residential area recorded:", sum(is.na(detail_train$SMALL_AREA_NAME)),"\n" )
-# no NAs, every coupon purchase has a user residential area recorded
 
 cat(sum(user_list[is.na(user_list$user_pref), "USER_ID_hash" ] %in% unique(detail_train[!is.na(detail_train$SMALL_AREA_NAME), "USER_ID_hash"])), "users without pref name in user_list but has small area residential name in detail_train\n")
 ```
@@ -414,7 +413,7 @@ dat$purchase_oop<- NULL
 
 # Creating the dataframe
 
-## Interaction variables
+## Creating columns for coupon-user characteristic match
 ```{r}
 ##Genre Match
 dat$en_genre<-as.character(dat$en_genre)
@@ -450,11 +449,10 @@ dat$user_pref[is.na(dat$user_pref)] <- "Unknown"
 dat$user_pref <- as.factor(dat$user_pref)
 ```
 
-drop user and coupon IDs & set as factor
+Drop user and coupon IDs
 ```{r}
 dat <-subset(dat,select = -c(USER_ID_hash, COUPON_ID_hash))
 ```
-
 
 ```{r}
 write.csv(dat, paste0(dir,"visit_user_coupon_features.csv"), row.names = F)
