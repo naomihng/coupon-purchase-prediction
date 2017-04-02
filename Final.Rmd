@@ -28,8 +28,7 @@ library(readr)
 ```
 
 # Translation
-Changing of Japanese names to english names 
-FORK and adapted from andreas https://www.kaggle.com/anguyen/coupon-purchase-prediction/translate-everything-to-english-using-r 
+Changing of Japanese names to english names forked and adapted from [andreas] (https://www.kaggle.com/anguyen/coupon-purchase-prediction/translate-everything-to-english-using-r)
 ```{r}
 dir <- './data/'
 # Create master translation table from Japanese to English
@@ -79,7 +78,7 @@ write.csv(prefecture_locations, paste0(dir,"prefecture_locations_en.csv"), row.n
 
 ```
 
-# Loading dataframe and Background
+# Loading Dataframe and Background on Different Datasets
 ```{r}
 dir <- './data/'
 visit <- read_csv(paste0(dir,"coupon_visit_train.csv"))
@@ -125,7 +124,7 @@ head(detail_train[duplicated(detail_train$USER_ID_hash),])
 ```
 
 ## Understanding User_list
-Prefecture (not small area) is provided
+Prefecture (not small area) is provided.
 ```{r}
 head(user_list)
 str(user_list)
@@ -396,11 +395,11 @@ Unsurprisingly, one's gender does influence the genre of coupons viewed. As seen
 ```{r}
 area_train$en_pref <- as.character(area_train$en_pref) 
 
-area.train.list <- area_train%>%
-  group_by(COUPON_ID_hash)%>%
+area.train.list <- area_train %>%
+  group_by(COUPON_ID_hash) %>%
   summarise(areas = list(en_pref))
 
-dat<- merge(dat,area.train.list,by= "COUPON_ID_hash", all.x = T)
+dat<- merge(dat, area.train.list, by= "COUPON_ID_hash", all.x = T)
 dat$match_pref <- ifelse(dat$user_pref %in% dat$areas, 1, 0)
 
 ggplot(dat[!is.na(dat$user_pref) & dat$purchase ==1,],aes(x=user_pref)) + geom_bar()  + coord_flip()
@@ -409,6 +408,8 @@ dat$purchase_oop <- ifelse(dat$purchase == 1 & dat$match_pref == 0,"Outside of P
 ggplot(dat[dat$purchase == 1,], aes(x=purchase_oop)) + geom_bar() + coord_flip()
 dat$areas<- NULL
 dat$purchase_oop<- NULL
+
+dat$match_pref<-as.factor(dat$match_pref)
 ```
 
 # Creating the dataframe
@@ -478,7 +479,6 @@ If reading new file:
 #dat$USABLE_DATE_BEFORE_HOLIDAY<-as.factor(dat$USABLE_DATE_BEFORE_HOLIDAY)
 #dat$USABLE_DATE_Weekday<-as.factor(dat$USABLE_DATE_Weekday)
 #dat$USABLE_DATE_Weekend<-as.factor(dat$USABLE_DATE_Weekend)
-dat$match_pref<-as.factor(dat$match_pref)
 ```
 
 ## Split into test and train dataset
@@ -576,7 +576,6 @@ plot(nb, col="red")
 
 ## KNN
 KNN was not used in the end due to high number of observations which require the calculation of large numbers of distance for prediction. However, this could be one of a feasible models for prediction as the observations that are similar have similar purchasing decisions.  
-
 ```{r}
 #ctrl <- trainControl(method = "repeatedcv", number = 10,savePredictions = TRUE)
 #set.seed(4217)
