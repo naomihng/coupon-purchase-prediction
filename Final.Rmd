@@ -21,7 +21,7 @@ In this case, we seek to use the Kaggle dataset on Pompare Coupon recommendation
 Using the prediction, we can understand how likely a user will buy a coupon if they view it. Together with another model to understand the probability each user views the coupons, we can recommend coupons to the users. This aims to reduce the cost of emailing unsuitable coupons to the customers and earn greater commission as users used our recommended coupons. 
 
 
-```{r}
+```{r, echo=FALSE, message=FALSE}
 library(dplyr)
 library(lubridate)
 library(readr)
@@ -72,7 +72,7 @@ write.csv(detail_train, paste0(dir,"coupon_detail_train_en.csv"), row.names = F)
 # Prefecture Location
 prefecture_locations = read.csv(paste0(dir,"prefecture_locations.csv"), as.is=T) 
 names(trans)=c("jp","en_PREF_NAME")
-prefecture_locations=merge(prefecture_locations,trans,by.x="ï..PREF_NAME",by.y="jp",all.x=T)
+prefecture_locations=merge(prefecture_locations,trans,by.x="PREF_NAME",by.y="jp",all.x=T)
 names(trans)=c("jp","en_prefectual_office"); prefecture_locations=merge(prefecture_locations,trans,by.x="PREFECTUAL_OFFICE",by.y="jp",all.x=T)
 write.csv(prefecture_locations, paste0(dir,"prefecture_locations_en.csv"), row.names = F)
 
@@ -157,7 +157,7 @@ That explains multiple small areas associated with each user. Coupons could be d
 small.area.pref <- unique(list_train[,c("en_small_area", "coupon_pref")])
 
 # Merge with detail train to get prefecture for small area
-detail_train <- merge(detail_train, small.area.pref, by.x = "en_SMALL_AREA_NAME", by.y = "en_small_area", all.x = TRUE)
+detail_train <- merge(detail_train, small.area.pref, by = "en_small_area", all.x = TRUE)
 
 # Get most frequent prefecture for each user from purchase log
 getmode <- function(v) {
@@ -280,6 +280,19 @@ dat$discgroup <- as.factor(dat$discgroup)
 dat$PRICE_RATE <- NULL
 ```
 
+## If user prefecture is in one of the prefectures where coupon can be used in
+```{r}
+area_train$en_pref <- as.character(area_train$en_pref) 
+
+area.train.list <- area_train %>%
+  group_by(COUPON_ID_hash) %>%
+  summarise(areas = list(en_pref))
+
+dat<- merge(dat, area.train.list, by = "COUPON_ID_hash", all.x = T)
+dat$match_pref <- ifelse(dat$user_pref %in% dat$areas, 1, 0)
+dat$match_pref<-as.factor(dat$match_pref)
+```
+
 # Data Exploration
 This section aims to explore the coupon data, based on various characteristics of the coupons. Exploration will be conducted for list prices of coupons first, followed by exploration for purchases of coupons.
 
@@ -392,24 +405,14 @@ ggplot(dat,aes(x=en_capsule,fill=SEX_ID)) + geom_bar(position="fill") + facet_wr
 
 Unsurprisingly, one's gender does influence the genre of coupons viewed. As seen in the graph, female users view Hair Salon, Nail & Eye Salon, Beauty, Spa and Relaxation coupon genres more often than their male counterparts whose views and purchases in these genres are basically non-existent. 
 
+### Are users buying from same prefectures?
 ```{r}
-area_train$en_pref <- as.character(area_train$en_pref) 
-
-area.train.list <- area_train %>%
-  group_by(COUPON_ID_hash) %>%
-  summarise(areas = list(en_pref))
-
-dat<- merge(dat, area.train.list, by= "COUPON_ID_hash", all.x = T)
-dat$match_pref <- ifelse(dat$user_pref %in% dat$areas, 1, 0)
-
 ggplot(dat[!is.na(dat$user_pref) & dat$purchase ==1,],aes(x=user_pref)) + geom_bar()  + coord_flip()
 ggplot(area_train[!is.na(area_train$en_pref),], aes(x=en_pref)) + geom_bar() + coord_flip()
 dat$purchase_oop <- ifelse(dat$purchase == 1 & dat$match_pref == 0,"Outside of Prefecture","Within Prefecture")
 ggplot(dat[dat$purchase == 1,], aes(x=purchase_oop)) + geom_bar() + coord_flip()
 dat$areas<- NULL
 dat$purchase_oop<- NULL
-
-dat$match_pref<-as.factor(dat$match_pref)
 ```
 
 # Creating the dataframe
@@ -648,7 +651,7 @@ plotPrecisionVSRecall <- function(model, data, field){
 plotPrecisionVSRecall(log_fit,test,"purchase")
 ```
 
-From the intersection point, a threshold of 0.25 might get the best precision and recall {EDITED}
+From the intersection point, a threshold of 0.25 might get the best precision and recall
 
 ```{r}
 best.pred <- predict(log_fit,test,type = "prob")
