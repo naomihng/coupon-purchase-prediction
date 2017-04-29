@@ -1,4 +1,4 @@
-# Forked and adapted from forked from [Translate Everything to English Using R by andreas](https://www.kaggle.com/anguyen/coupon-purchase-prediction/translate-everything-to-english-using-r/)
+# Forked and adapted from [Translate Everything to English Using R by andreas](https://www.kaggle.com/anguyen/coupon-purchase-prediction/translate-everything-to-english-using-r/)
 
 system("ls ../input")
 system("echo \n\n")
