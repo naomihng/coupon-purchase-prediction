@@ -1,3 +1,5 @@
+# Forked and adapted from forked from [Translate Everything to English Using R by andreas](https://www.kaggle.com/anguyen/coupon-purchase-prediction/translate-everything-to-english-using-r/)
+
 system("ls ../input")
 system("echo \n\n")
 system("head ../input/*")
@@ -8,7 +10,7 @@ system("head ../input/*")
 #################################################################################
 
 # Create master translation table from Japanese to English
-coupon_list_train = read.csv("coupon_list_train.csv", as.is=T) # Source file the English list is keyed by
+coupon_list_train = read.csv("../input/coupon_list_train.csv", as.is=T) # Source file the English list is keyed by
 trans = data.frame(
   jp=unique(c(coupon_list_train$GENRE_NAME, coupon_list_train$CAPSULE_TEXT,
               coupon_list_train$large_area_name, coupon_list_train$ken_name,
@@ -19,7 +21,7 @@ trans = data.frame(
 # Append data with translated columns...
 
 # COUPON_LIST_TRAIN.CSV
-coupon_list_train = read.csv("coupon_list_train.csv", as.is=T) # Read data file to translate
+coupon_list_train = read.csv("../input/coupon_list_train.csv", as.is=T) # Read data file to translate
 names(trans)=c("jp","en_capsule") # Rename column
 coupon_list_train=merge(coupon_list_train,trans,by.x="CAPSULE_TEXT",by.y="jp",all.x=T) # Join translation onto original data
 names(trans)=c("jp","en_genre"); coupon_list_train=merge(coupon_list_train,trans,by.x="GENRE_NAME",by.y="jp",all.x=T)
@@ -28,29 +30,26 @@ names(trans)=c("jp","en_ken"); coupon_list_train=merge(coupon_list_train,trans,b
 names(trans)=c("jp","en_large_area"); coupon_list_train=merge(coupon_list_train,trans,by.x="large_area_name",by.y="jp",all.x=T)
 write.csv(coupon_list_train, "coupon_list_train_en.csv", row.names = F)
 
-# COUPON_AREA_TRAIN.CSV
-coupon_area_train = read.csv("coupon_area_train.csv", as.is=T) 
+# COUPON_LIST_TRAIN.CSV
+coupon_area_train = read.csv("../input/coupon_area_train.csv", as.is=T)
 names(trans)=c("jp","en_small_area"); coupon_area_train=merge(coupon_area_train,trans,by.x="SMALL_AREA_NAME",by.y="jp",all.x=T)
 names(trans)=c("jp","en_pref"); coupon_area_train=merge(coupon_area_train,trans,by.x="PREF_NAME",by.y="jp",all.x=T)
 write.csv(coupon_area_train, "coupon_area_train_en.csv", row.names = F)
 
 # USER_LIST
-user_list = read.csv("user_list.csv", as.is=T) 
+user_list = read.csv("../input/user_list.csv", as.is=T)
 names(trans)=c("jp","en_pref"); user_list=merge(user_list,trans,by.x="PREF_NAME",by.y="jp",all.x=T)
 write.csv(user_list, "user_list_en.csv", row.names = F)
 
-# COUPON_DETAIL_TRAIN.CSV
-coupon_detail_train = read.csv("coupon_detail_train.csv", as.is=T) 
-names(trans)=c("jp","en_small_area"); coupon_detail_train=merge(coupon_detail_train,trans,by.x="SMALL_AREA_NAME",by.y="jp",all.x=T)
-write.csv(user_list, "user_detail_en.csv", row.names = F)
+# DETAIL_TRAIN
+coupon_detail_train = read.csv("../input/coupon_detail_train.csv", as.is=T) # Read data file to translate
+names(trans)=c("jp","en_SMALL_AREA_NAME") # Rename column
+coupon_detail_train=merge(coupon_detail_train,trans,by.x="SMALL_AREA_NAME",by.y="jp",all.x=T) # Join translation onto original data
+write.csv(coupon_detail_train, "coupon_detail_train_en.csv", row.names = F)
 
-# COUPON_Visit_TRAIN.CSV
-coupon_visit_train = read.csv("coupon_visit_train.csv", as.is=T) 
-
-# Prefecture Location
-prefecture_locations = read.csv("prefecture_locations.csv", as.is=T) 
-names(trans)=c("jp","en_PREF_NAME"); prefecture_locations=merge(prefecture_locations,trans,by.x="ï..PREF_NAME",by.y="jp",all.x=T)
-names(trans)=c("jp","en_prefectual_office"); prefecture_locations=merge(prefecture_locations,trans,by.x="PREFECTUAL_OFFICE",by.y="jp",all.x=T)
-write.csv(user_list, "prefecture_locations_en.csv", row.names = F)
-
+#PREFECTURE LOCATIONS
+pref_locations <- read.csv("../input/prefecture_locations.csv", as.is=T)
+names(trans)=c("jp","en_PREF_NAME")
+pref_locations=merge(pref_locations,trans,by.x="PREF_NAME",by.y="jp",all.x=T) # Join translation onto original data
+write.csv(pref_location, "pref_locations_en.csv", row.names = F)
 # You get the idea... can use this to translate any of the other files, too
